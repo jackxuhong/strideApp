@@ -403,6 +403,8 @@ class MainActivity : Activity() {
             FitPro.Field.IDLE_TIMEOUT,
             FitPro.Field.IDLE_MODE_LOCKOUT,
             FitPro.Field.SLEEP_TIMER_STATE,
+            FitPro.Field.START_REQUESTED,
+            FitPro.Field.REQUIRE_START_REQUESTED,
         )
 
         /** KPH/GRADE are the board's *targets* — read so physical buttons don't desync us. */
@@ -3445,6 +3447,14 @@ class MainActivity : Activity() {
             if (why != null) { Log.i(TAG, "sleep: board will not report ${f.name} ($why)"); continue }
             Log.i(TAG, "sleep: ${f.name} = ${FitPro.parse(reply, one)[f]}")
         }
+        // What ICON's console does at startup on a treadmill with a physical
+        // START. Left set, the board refuses Idle -> Running. Its own frame,
+        // read back so the log says whether it took.
+        val lockout = listOf(FitPro.Field.IDLE_MODE_LOCKOUT)
+        conn.exchange(FitPro.readWrite(deviceId, writes = mapOf(FitPro.Field.IDLE_MODE_LOCKOUT to 0.0)))
+        val back = conn.exchange(FitPro.readWrite(deviceId, lockout))
+        Log.i(TAG, "sleep: cleared IDLE_MODE_LOCKOUT, reads back " +
+                (back?.let { FitPro.parse(it, lockout)[FitPro.Field.IDLE_MODE_LOCKOUT] } ?: "nothing"))
     }
 
     private fun readLimits() {
