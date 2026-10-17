@@ -403,6 +403,8 @@ class MainActivity : Activity() {
             FitPro.Field.IDLE_TIMEOUT,
             FitPro.Field.IDLE_MODE_LOCKOUT,
             FitPro.Field.SLEEP_TIMER_STATE,
+            FitPro.Field.START_REQUESTED,
+            FitPro.Field.REQUIRE_START_REQUESTED,
         )
 
         /** KPH/GRADE are the board's *targets* — read so physical buttons don't desync us. */
@@ -2251,7 +2253,23 @@ class MainActivity : Activity() {
             }
             loadUrl(assetFor(ui))
         }
-        setContentView(web)
+        /* Every UI is laid out at a fixed 1280x800. Consoles with other panels
+           (the Elite 900 is 1024x600) get the view laid out at that size and
+           scaled to fill. WebView zoom cannot do it: it will not go
+           below fit-to-width, which leaves a 16:10 page too tall for a wider
+           panel. Touches are mapped through the scale by the view system. */
+        val d = resources.displayMetrics.density
+        val screen = android.graphics.Point().also { windowManager.defaultDisplay.getRealSize(it) }
+        val w = (1280 * d).toInt()
+        val h = (800 * d).toInt()
+        // Stretched to fill rather than letterboxed: 16:10 on a ~17:10 panel
+        // is a 7% widening, which reads better than black bars.
+        web.scaleX = screen.x.toFloat() / w
+        web.scaleY = screen.y.toFloat() / h
+        setContentView(android.widget.FrameLayout(this).apply {
+            setBackgroundColor(0xFF100F0E.toInt())
+            addView(web, android.widget.FrameLayout.LayoutParams(w, h, android.view.Gravity.CENTER))
+        })
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         window.decorView.systemUiVisibility =
             View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
@@ -3439,6 +3457,14 @@ class MainActivity : Activity() {
             if (why != null) { Log.i(TAG, "sleep: board will not report ${f.name} ($why)"); continue }
             Log.i(TAG, "sleep: ${f.name} = ${FitPro.parse(reply, one)[f]}")
         }
+        // What ICON's console does at startup on a treadmill with a physical
+        // START. Left set, the board refuses Idle -> Running. Its own frame,
+        // read back so the log says whether it took.
+        val lockout = listOf(FitPro.Field.IDLE_MODE_LOCKOUT)
+        conn.exchange(FitPro.readWrite(deviceId, writes = mapOf(FitPro.Field.IDLE_MODE_LOCKOUT to 0.0)))
+        val back = conn.exchange(FitPro.readWrite(deviceId, lockout))
+        Log.i(TAG, "sleep: cleared IDLE_MODE_LOCKOUT, reads back " +
+                (back?.let { FitPro.parse(it, lockout)[FitPro.Field.IDLE_MODE_LOCKOUT] } ?: "nothing"))
     }
 
     private fun readLimits() {

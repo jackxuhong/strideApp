@@ -344,6 +344,8 @@ button.pulse{animation:pulse .9s ease-out 2}
   color:var(--ink);font-family:inherit;display:block;text-align:center;
 }
 .plan:active,.plan.down{transform:scale(.97);background:rgba(57,224,255,.2)}
+/* The shape BEGIN will start. The script marked it all along; nothing drew it. */
+.plan.on{border-color:var(--accent);background:rgba(57,224,255,.14)}
 .plan .pn{font-size:22px;letter-spacing:.14em;text-transform:uppercase}
 .plan .pb{margin-top:7px;font-size:14px;color:var(--ink-faint);min-height:34px}
 .plan canvas{display:block;margin:6px auto 0}
@@ -394,7 +396,12 @@ button.pulse{animation:pulse .9s ease-out 2}
 .uicard .un{margin-top:14px;font-size:18px;letter-spacing:.18em;text-transform:uppercase}
 .uicard .ub{margin-top:6px;font-size:13px;color:var(--ink-faint);line-height:1.35;min-height:36px}
 
-.pick.who{width:212px;height:210px;margin:0 12px}
+/* A household plus Guest can outgrow one row: five people and Guest is 1416px
+   on a 1280 panel. The row is held to the panel and the cards shrink to share
+   it, rather than wrapping into the BACK and SETTINGS buttons below. */
+#people{width:1240px}
+.pick.who{flex:0 1 212px;min-width:0;height:210px;margin:0 12px}
+.pick.who .name{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pick.who .initial{
   width:84px;height:84px;border-radius:42px;
   border:2px solid var(--accent);color:var(--accent);

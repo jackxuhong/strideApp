@@ -153,10 +153,16 @@ object FitPro {
            for. Read once at startup and logged — see MainActivity's
            readSleepConfig. */
         IDLE_TIMEOUT(34, 2, 1.0, false, false, "Idle timeout", "s"),
-        IDLE_MODE_LOCKOUT(95, 1, 1.0, false, false, "Idle lockout", ""),
+        // The exception: writable, because some boards (Elite 900, Android 7)
+        // power up with it set and then refuse WorkoutMode=Running. ICON's
+        // console clears it at startup on any belt machine with a START key.
+        IDLE_MODE_LOCKOUT(95, 1, 1.0, false, true, "Idle lockout", ""),
         // FanState: 0 Off, 1 Low, 2 Medium, 3 High, 4 Auto
         FAN_STATE(98, 1, 1.0, false, true, "Fan", ""),
         SLEEP_TIMER_STATE(107, 1, 1.0, false, false, "Sleep timer", ""),
+        // Read-only diagnosis: does this board gate Running on a physical START?
+        START_REQUESTED(96, 1, 1.0, false, false, "Start requested", ""),
+        REQUIRE_START_REQUESTED(108, 1, 1.0, false, false, "Require start", ""),
         ;
 
         /** Decode this field's raw bytes into a scaled value. */
