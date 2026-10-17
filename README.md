@@ -84,14 +84,18 @@ an opinionated health dashboard if you want a starting point.
 
 ## Will it work on my treadmill?
 
-Honestly, maybe. It's proven on one machine, mine:
+Honestly, maybe. It's proven on two machines:
 
-| | |
-|---|---|
-| Model | NordicTrack C 1750 |
-| Generation | Gen 6, the embedded "CLASSIC" console |
-| Motor board | FitPro, device id `0x04` |
-| Reported ranges | incline −3 to +12 %, speed 1.6 to 20 km/h |
+| | | |
+|---|---|---|
+| Model | NordicTrack C 1750 | NordicTrack Elite 900 (Costco model) |
+| Console | Gen 6, the embedded "CLASSIC" console, Android 9, 1280×800 | Android 7.0, 1024×600 |
+| Motor board | FitPro, device id `0x04` | FitPro, device id `0x04`, firmware 83 |
+| Reported ranges | incline −3 to +12 %, speed 1.6 to 20 km/h | incline 0 to 12 %, speed 1.0 to 19.3 km/h |
+
+The Elite 900's board powers up with its idle lockout set and refuses to start
+the belt until it's cleared. STRIDE now clears it at startup, as iFit does.
+The UI is stretched to fill its smaller screen.
 
 Other Gen 6 NordicTrack and ProForm consoles on the same board are probably
 fine, because the protocol looks like a family rather than a single model, but
