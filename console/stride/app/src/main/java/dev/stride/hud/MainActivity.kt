@@ -2255,15 +2255,17 @@ class MainActivity : Activity() {
         }
         /* Every UI is laid out at a fixed 1280x800. Consoles with other panels
            (the Elite 900 is 1024x600) get the view laid out at that size and
-           scaled to fit, centred. WebView zoom cannot do it: it will not go
+           scaled to fill. WebView zoom cannot do it: it will not go
            below fit-to-width, which leaves a 16:10 page too tall for a wider
            panel. Touches are mapped through the scale by the view system. */
         val d = resources.displayMetrics.density
         val screen = android.graphics.Point().also { windowManager.defaultDisplay.getRealSize(it) }
         val w = (1280 * d).toInt()
         val h = (800 * d).toInt()
-        web.scaleX = minOf(screen.x.toFloat() / w, screen.y.toFloat() / h)
-        web.scaleY = web.scaleX
+        // Stretched to fill rather than letterboxed: 16:10 on a ~17:10 panel
+        // is a 7% widening, which reads better than black bars.
+        web.scaleX = screen.x.toFloat() / w
+        web.scaleY = screen.y.toFloat() / h
         setContentView(android.widget.FrameLayout(this).apply {
             setBackgroundColor(0xFF100F0E.toInt())
             addView(web, android.widget.FrameLayout.LayoutParams(w, h, android.view.Gravity.CENTER))
