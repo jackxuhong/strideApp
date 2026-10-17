@@ -2236,12 +2236,6 @@ class MainActivity : Activity() {
         web = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
-            /* Every UI is laid out at a fixed 1280x800. Consoles with other
-               panels (the Elite 900 is 1024x600) get the whole page scaled to
-               fit, letterboxed by the background colour below. */
-            val screen = android.graphics.Point().also { windowManager.defaultDisplay.getRealSize(it) }
-            settings.useWideViewPort = true
-            setInitialScale((minOf(screen.x / 1280f, screen.y / 800f) * 100).toInt())
             /* The launch screen's field colour, not Original's navy. The
                WebView paints this before the document does, so it is the one
                frame between the splash and the UI — matching it makes the
@@ -2259,7 +2253,21 @@ class MainActivity : Activity() {
             }
             loadUrl(assetFor(ui))
         }
-        setContentView(web)
+        /* Every UI is laid out at a fixed 1280x800. Consoles with other panels
+           (the Elite 900 is 1024x600) get the view laid out at that size and
+           scaled to fit, centred. WebView zoom cannot do it: it will not go
+           below fit-to-width, which leaves a 16:10 page too tall for a wider
+           panel. Touches are mapped through the scale by the view system. */
+        val d = resources.displayMetrics.density
+        val screen = android.graphics.Point().also { windowManager.defaultDisplay.getRealSize(it) }
+        val w = (1280 * d).toInt()
+        val h = (800 * d).toInt()
+        web.scaleX = minOf(screen.x.toFloat() / w, screen.y.toFloat() / h)
+        web.scaleY = web.scaleX
+        setContentView(android.widget.FrameLayout(this).apply {
+            setBackgroundColor(0xFF100F0E.toInt())
+            addView(web, android.widget.FrameLayout.LayoutParams(w, h, android.view.Gravity.CENTER))
+        })
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         window.decorView.systemUiVisibility =
             View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
