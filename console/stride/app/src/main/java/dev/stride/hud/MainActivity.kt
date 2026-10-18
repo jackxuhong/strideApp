@@ -1795,6 +1795,10 @@ class MainActivity : Activity() {
      */
     private fun beltStillKph(): Double = maxOf(lastActualKph, idleBeltKph)
 
+    /** Just the mode change, when there is one — see the poll loop. */
+    private fun modeAlone(w: Map<FitPro.Field, Double>): Map<FitPro.Field, Double> =
+        w[FitPro.Field.WORKOUT_MODE]?.let { mapOf(FitPro.Field.WORKOUT_MODE to it) } ?: w
+
     private fun enforceStopped(actualKph: Double): Map<FitPro.Field, Double>? {
         if (Session.isMoving(session)) return null
         if (actualKph < STOPPED_KPH) return null
@@ -2501,10 +2505,16 @@ class MainActivity : Activity() {
                                queued.getValue(FitPro.Field.WORKOUT_MODE))
             }
 
-            val writes = enforceStopped(beltStillKph())
+            // The two stops below are not queued, so they get no `rest` — and
+            // need none. Pause mode is what stops the belt; the KPH 0 beside it
+            // is the field the Elite 900 refuses (its floor is 1.0 km/h), which
+            // took the PAUSE down with it on every frame. On 2026-10-17 that
+            // left the belt running for 38 minutes while enforceStopped sent
+            // {KPH 0, PAUSE} eleven thousand times.
+            val writes = enforceStopped(beltStillKph())?.let(::modeAlone)
                 ?: enforceLevel(lastActualGrade)
                 ?: enforceFanOff()
-                ?: queued ?: decelStep() ?: rampStep()
+                ?: queued ?: decelStep()?.let(::modeAlone) ?: rampStep()
 
             if (writes != null) lastWriteMs = SystemClock.elapsedRealtime()
             val reply = conn.exchange(FitPro.readWrite(deviceId, READS, writes ?: emptyMap()))
@@ -2811,6 +2821,13 @@ class MainActivity : Activity() {
         val pulse = pulseNow(v[FitPro.Field.PULSE]?.toInt() ?: 0)
 
         if (Session.isMoving(session)) {
+            // The board zeroes its odometer when its own STOP takes it through
+            // Results to Idle, mid-walk as far as STRIDE knows. Re-anchor so
+            // the walk keeps what it had rather than restarting from 0.
+            if (rawDistance < baseDistance + sessionDistance - 1.0) {
+                baseDistance = rawDistance - sessionDistance
+                Log.i(TAG, "odometer went back to $rawDistance — carrying ${"%.0f".format(sessionDistance)} m over")
+            }
             sessionDistance = (rawDistance - baseDistance).coerceAtLeast(0.0)
             sessionCalories = (rawCalories - baseCalories).coerceAtLeast(0.0)
             if (speed > maxSpeed) maxSpeed = speed
