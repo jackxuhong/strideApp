@@ -263,7 +263,7 @@ and your workout history with it.
 
 Everything is on the treadmill's own screen. There are no config files.
 
-- **Settings → Who walks.** Add yourself. Nobody is pre-configured.
+- **Settings → People.** Add yourself. Nobody is pre-configured.
 - **Settings → Treadmill.** Units, warm-up, cool-down, guided-walk speed limit.
 - **Settings → Interface.** Pick one of five. *Original* is the most tested.
 
@@ -339,7 +339,7 @@ cp stride.conf.example stride.conf
 ✅ `script.stride_coach` exists. Run it with `kind: morning` and a `task`, and a
 message appears on `sensor.stride_coach`.
 
-After `stride_persons.py`, the console's **Settings → Who walks** lists your
+After `stride_persons.py`, the console's **Settings → People** lists your
 Home Assistant people under *From Home Assistant*.
 
 ---

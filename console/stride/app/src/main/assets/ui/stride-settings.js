@@ -501,7 +501,7 @@
   };
 
   var SECTIONS = [
-    ['people', 'Who walks',      paneWho],
+    ['people', 'People',         paneWho],
     ['hr',     'Heart rate',     paneHeart],
     ['ha',     'Home Assistant', paneHa],
     ['deck',   'Treadmill',      paneDeck],
@@ -522,7 +522,7 @@
 
   // --- who walks ---
   function paneWho(pane) {
-    var sc = head(pane, 'Who walks',
+    var sc = head(pane, 'People',
       'Everyone who uses this treadmill. Each person keeps their own distance and ' +
       'history, and chooses whether any of it leaves the console.');
 
@@ -591,7 +591,7 @@
       wrap.appendChild(press(el('button', 'sx-pill sx-go', 'ADD'), commit));
 
       detail.appendChild(row('Their name',
-        'Everyone who walks gets their own totals. Coaching and recording are ' +
+        'Everyone who works out gets their own totals. Coaching and recording are ' +
         'set per person once they are here.', wrap));
 
       // Straight into the keyboard — the only reason to be on this screen is
