@@ -1527,6 +1527,8 @@ window.coach = function(c){
 /* --- render -------------------------------------------------------------- */
 window.render = function(s){
   const mode = (s.mode || 'welcome').toLowerCase();
+  // The console's own STOP, pressed again while paused — see followButtons.
+  if (s.askEnd && mode === 'paused') $('confirm').classList.add('show');
   showScreen(mode);
   $('dmk').classList.toggle('show', !!s.dmk);
 

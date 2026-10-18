@@ -95,6 +95,8 @@ data class Snapshot(
     val session: Int,
     val workout: String,
     val dmk: Boolean,
+    /** The physical STOP was pressed again while paused: ask whether to end. */
+    val askEnd: Boolean = false,
     /** "warmup", "resuming", "cooldown", or empty when no ramp is in flight. */
     val ramping: String,
     /** Seconds left in a timed phase (warm-up / cool-down); 0 otherwise. */
@@ -262,6 +264,7 @@ data class Snapshot(
         append("\"fan\":$fan,")
         append("\"workout\":\"${esc(workout)}\",")
         append("\"dmk\":$dmk,")
+        append("\"askEnd\":$askEnd,")
         append("\"ramping\":\"${esc(ramping)}\",")
         append("\"phaseLeft\":${"%.0f".format(phaseLeft)},")
         append("\"boardMode\":$boardMode,")

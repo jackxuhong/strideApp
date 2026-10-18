@@ -132,6 +132,8 @@ object FitPro {
         GRADE(1, 2, 0.01, true, true, "Target incline", "%"),
         RPM(5, 2, 1.0, false, false, "Belt RPM", ""),
         DISTANCE(6, 4, 1.0, false, false, "Distance", "m"),
+        /** Physical buttons — read with [keyCode], never parse(). */
+        KEY_OBJECT(7, 14, 1.0, false, false, "Keys", ""),
         FAN_SPEED(8, 1, 1.0, false, true, "Fan", ""),
         // 4 bytes wide, but only byte 0 is bpm — see decode().
         PULSE(10, 4, 1.0, false, false, "Pulse", "bpm"),
@@ -447,6 +449,20 @@ object FitPro {
         }
         return out
     }
+
+    /**
+     * KeyObject (14 bytes), as read off the Elite 900 on 2026-10-18:
+     * `u16 key, 8 bytes that vary with it, 15 00, u16 ms held`, all zero/FF
+     * with nothing pressed. Only the key is used; only STOP and START are
+     * confirmed (a third key read 1001).
+     */
+    object Key {
+        const val STOP = 1
+        const val START = 2
+    }
+
+    fun keyCode(reply: ByteArray): Int =
+        (reply[4].toInt() and 0xFF) or ((reply[5].toInt() and 0xFF) shl 8)
 
     fun hex(b: ByteArray, len: Int = b.size): String =
         (0 until minOf(len, b.size)).joinToString(" ") { "%02X".format(b[it]) }
