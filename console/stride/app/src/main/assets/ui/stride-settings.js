@@ -114,7 +114,7 @@
     '.sx-step button{margin:0 2px}',
     '.sx-step button{width:60px;height:56px;border-radius:14px;background:rgba(22,37,90,.5);',
     '  border:2px solid #1e3068;color:#eaf0ff;font-size:26px;font-weight:200}',
-    '.sx-step button.sx-down{background:rgba(57,224,255,.2)}',
+    '.sx-step button.sx-down,.sx-step button.down{background:rgba(57,224,255,.2)}',
     '.sx-step .sx-v{min-width:128px;text-align:center;font-size:24px;font-weight:300}',
     '.sx-step .sx-v small{font-size:15px;color:#7f92c4;margin-left:5px}',
 
@@ -316,6 +316,36 @@
     return s;
   }
 
+  /* Somebody's weight, kept in kilograms and shown in the console's units.
+     Same shape as the age stepper: below the bottom clears it, and the first
+     tap up lands mid-range. */
+  function weightStepper(p) {
+    var lb = S.units === 'mi', perKg = lb ? 2.20462 : 1;
+    var s = el('div', 'sx-step');
+    var v = el('div', 'sx-v');
+    var value = Math.round((p.weight_kg || 0) * perKg);
+    var lo = Math.round(30 * perKg), hi = Math.round(250 * perKg);
+    var draw = function () {
+      v.innerHTML = value >= lo
+        ? value + '<small>' + (lb ? 'lb' : 'kg') + '</small>' : '<small>not set</small>';
+    };
+    var bump = function (d) {
+      if (value < lo) value = d > 0 ? Math.round(75 * perKg) : 0;
+      else value = Math.min(hi, value + d);
+      if (value < lo) value = 0;
+      draw();
+      p.weight_kg = value / perKg;
+      try { S = JSON.parse(bridge().setPersonWeight(p.name, p.weight_kg)); } catch (e) {}
+    };
+    // Hold to repeat, as on the speed buttons: a weight in pounds can be fifty
+    // steps from the starting guess.
+    s.appendChild(global.STRIDE.stepper(el('button', '', '&minus;'), bump, -1, -1));
+    s.appendChild(v);
+    s.appendChild(global.STRIDE.stepper(el('button', '', '+'), bump, 1, 1));
+    draw();
+    return s;
+  }
+
   /* What a stored password looks like from here. The console does not send
      the password itself — Settings.json() sends `mqtt_pass_set` instead — so
      this is a statement that one exists, never the thing itself. */
@@ -501,7 +531,7 @@
   };
 
   var SECTIONS = [
-    ['people', 'Who walks',      paneWho],
+    ['people', 'People',         paneWho],
     ['hr',     'Heart rate',     paneHeart],
     ['ha',     'Home Assistant', paneHa],
     ['deck',   'Treadmill',      paneDeck],
@@ -522,7 +552,7 @@
 
   // --- who walks ---
   function paneWho(pane) {
-    var sc = head(pane, 'Who walks',
+    var sc = head(pane, 'People',
       'Everyone who uses this treadmill. Each person keeps their own distance and ' +
       'history, and chooses whether any of it leaves the console.');
 
@@ -591,7 +621,7 @@
       wrap.appendChild(press(el('button', 'sx-pill sx-go', 'ADD'), commit));
 
       detail.appendChild(row('Their name',
-        'Everyone who walks gets their own totals. Coaching and recording are ' +
+        'Everyone who works out gets their own totals. Coaching and recording are ' +
         'set per person once they are here.', wrap));
 
       // Straight into the keyboard — the only reason to be on this screen is
@@ -627,6 +657,17 @@
         'those and nothing else — the estimate behind it is rough anyway, so ' +
         'the coach talks in words rather than numbers either way.',
         ageStepper(p)));
+      detail.appendChild(row('Weight',
+        'Needed for calories. Without it a walk shows no calories rather than ' +
+        'a guess — the board\'s own count assumes the same weight for everybody.',
+        weightStepper(p)));
+      detail.appendChild(row('Sex',
+        'Optional. Kept for heart-rate calorie estimates; nothing uses it yet.',
+        segment(null, [['', 'Not set'], ['f', 'Female'], ['m', 'Male']], p.sex || '',
+          function (v) {
+            try { S = JSON.parse(bridge().setPersonSex(p.name, v)); } catch (e) {}
+            p.sex = v;
+          })));
       detail.appendChild(row('Record to Home Assistant',
         'Their distance, time and calories, published under their own name.',
         toggle(null, p.publish, function (on) {

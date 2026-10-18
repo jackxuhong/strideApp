@@ -139,7 +139,7 @@ Other converters in the same namespace: `ByteConverter`, `ShortConverter`, `IntC
 | 0 | `Kph` | Speed | **writable** | **target speed** |
 | 1 | `Grade` | Grade | **writable** | **target incline %** |
 | 6 | `Distance` | Int | read | |
-| 7 | `KeyObject` | KeyObj | read | **physical button presses** |
+| 7 | `KeyObject` | KeyObj | read | **physical button presses** — see **Physical buttons** |
 | 8 | `FanSpeed` | Byte | writable | |
 | 10 | `Pulse` | Pulse | writable | heart rate |
 | 12 | `WorkoutMode` | Mode | writable | state machine — see **Sleep** below |
@@ -391,9 +391,32 @@ ICON's own console asked before doing the second, which is the right instinct.
 
 1. Whether FitPro**2** framing differs from FitPro**1**; the console answers FitPro1 framing, so
    this may not matter.
-2. `KeyObject` (7, 14 bytes) decoding — the physical-button payload structure.
+2. `KeyObject` (7, 14 bytes) beyond the key code — see **Physical buttons**.
 3. Whether `StartRequested` (96) / `RequireStartRequested` (108) gate anything we haven't hit —
    not needed for the verified sequence above.
+
+## Physical buttons
+
+Read off the Elite 900 on 2026-10-18. `KeyObject` (7) is 14 bytes:
+`u16 key, 8 bytes that vary with the key, 15 00, u16 ms held`, and
+`00 00 FF FF FF FF FF FF FF FF 00 00 00 00` with nothing pressed. Key 1 is
+STOP and 2 is START; another key read 1001. Unconfirmed on other boards.
+
+What the board does with them, as `WorkoutMode` (12):
+
+| Press | From | To |
+|---|---|---|
+| STOP | Running | Pause |
+| START | Pause | Running |
+| STOP | Pause | Results |
+| STOP | Results | Idle |
+| START | Results | *nothing — it beeps* |
+
+Results refuses a write of Running; write Idle first, then Running.
+
+This board also refuses `Kph` 0 (its floor is 1.0 km/h), and a refused field
+fails the whole frame — so `{Kph 0, WorkoutMode Pause}` is never accepted.
+Pause on its own stops the belt.
 
 ## Safety
 

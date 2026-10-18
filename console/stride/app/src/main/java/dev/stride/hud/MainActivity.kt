@@ -383,7 +383,6 @@ class MainActivity : Activity() {
             FitPro.Field.DISTANCE,
             FitPro.Field.CURRENT_TIME,
             FitPro.Field.PULSE,
-            FitPro.Field.CALORIES,
             // Read on the chance it is a different sensor from DISTANCE — see
             // Snapshot.rpm. It has only ever been asked for by probeSpeed(),
             // which runs once per app start and had already rolled out of the
@@ -538,7 +537,12 @@ class MainActivity : Activity() {
 
     private fun refreshWalkerHrMax() {
         walkerHrMax = cfg.person(walker)?.maxPulse ?: 0
+        // A guest is not in the list, so gets 0 and no calories.
+        walkerKg = cfg.person(walker)?.weightKg ?: 0.0
     }
+
+    /** The walker's weight, or 0 when there is none and calories are off. */
+    @Volatile private var walkerKg = 0.0
 
     // --- guided walk ---------------------------------------------------------
     /** Empty on a casual walk. Set once at START and never rewritten mid-walk. */
@@ -723,9 +727,12 @@ class MainActivity : Activity() {
      *  wherever they happened to be when START was pressed. */
     @Volatile private var armBaseline = false
     @Volatile private var baseDistance = 0.0
-    @Volatile private var baseCalories = 0.0
     @Volatile private var sessionDistance = 0.0
+    /** Active kcal, the figure history and Home Assistant get. See [Calories]. */
     @Volatile private var sessionCalories = 0.0
+    /** Oxygen above resting so far, ml/kg, and the odometer it was summed to. */
+    @Volatile private var activeO2 = 0.0
+    @Volatile private var o2Distance = 0.0
 
     // Rolling stats for the summary screen.
     @Volatile private var maxSpeed = 0.0
@@ -784,6 +791,10 @@ class MainActivity : Activity() {
     // Speed-probe bookkeeping — see probeSpeed().
     /** Last board mode we logged, so transitions are visible without spam. */
     @Volatile private var lastBoardMode: Int? = null
+    /** See [followButtons]. Cleared by anything that answers the question. */
+    @Volatile private var askEnd = false
+    /** RESUME found the board in Results, which refuses Running; Idle first. */
+    @Volatile private var restartFromResults = false
 
     /** Sticky safety-key alarm — see accumulate(). Cleared only by acknowledging. */
     @Volatile private var dmkLatched = false
@@ -1036,6 +1047,7 @@ class MainActivity : Activity() {
          * driven from the poll loop. Touching SPEED cancels it.
          */
         @JavascriptInterface fun resume() {
+            askEnd = false
             if (dmk) return
             if (session != Session.PAUSED) return
             session = Session.ACTIVE
@@ -1053,6 +1065,12 @@ class MainActivity : Activity() {
             rampTo = if (pausedKph > 0.0) pausedKph else cfg.warmupKph()
             rampReason = "resuming"
             pendingWrite = mapOf(FitPro.Field.WORKOUT_MODE to FitPro.Mode.RUNNING.toDouble())
+            // A second physical STOP leaves the board in Results, where it
+            // refuses Running. Idle first; followButtons sends Running after.
+            if (lastBoardMode == FitPro.Mode.RESULTS) {
+                restartFromResults = true
+                pendingWrite = mapOf(FitPro.Field.WORKOUT_MODE to FitPro.Mode.IDLE.toDouble())
+            }
             Log.i(TAG, "resuming — ramping back to ${"%.1f".format(rampTo)} km/h")
             repaint()
         }
@@ -1063,6 +1081,7 @@ class MainActivity : Activity() {
          * [COOLDOWN_MS]. SKIP goes straight to the summary.
          */
         @JavascriptInterface fun end() {
+            askEnd = false
             if (session == Session.SUMMARY) return
             // Ending from a pause means the belt is already stopped. Running a
             // cool-down from there spins it back up to 2 km/h only to walk it
@@ -1328,6 +1347,25 @@ class MainActivity : Activity() {
             // uses come off a cached copy.
             refreshWalkerHrMax()
             Log.i(TAG, "settings: age for $name -> ${if (clean > 0) "$clean" else "not given"}")
+            return cfg.json().toString()
+        }
+
+        /** Kilograms; anything outside a plausible adult range clears it. */
+        @JavascriptInterface fun setPersonWeight(name: String, kg: Double): String {
+            val clean = if (kg in 30.0..250.0) Math.round(kg * 10) / 10.0 else 0.0
+            cfg.savePeople(cfg.people().map {
+                if (it.name == name) it.copy(weightKg = clean) else it
+            })
+            refreshWalkerHrMax()
+            Log.i(TAG, "settings: weight for $name -> ${if (clean > 0) "$clean kg" else "not given"}")
+            return cfg.json().toString()
+        }
+
+        @JavascriptInterface fun setPersonSex(name: String, sex: String): String {
+            val clean = if (sex == "m" || sex == "f") sex else ""
+            cfg.savePeople(cfg.people().map {
+                if (it.name == name) it.copy(sex = clean) else it
+            })
             return cfg.json().toString()
         }
 
@@ -1795,6 +1833,96 @@ class MainActivity : Activity() {
      */
     private fun beltStillKph(): Double = maxOf(lastActualKph, idleBeltKph)
 
+    /**
+     * The console's own START and STOP, as iFit used them: STOP pauses, START
+     * resumes, STOP again while paused ends — after asking, as the screen's
+     * STOP does.
+     *
+     * The presses themselves are in KeyObject (field 7), which nobody has
+     * decoded. What the board does about them is in WorkoutMode, and every
+     * transition here is one STRIDE never writes in that session state: its
+     * own pause marks the session PAUSED before writing Pause, and its own
+     * resume marks it ACTIVE before writing Running.
+     */
+    private fun followButtons(from: Int?, to: Int) {
+        val paused = session == Session.PAUSED
+        when {
+            // RESUME pressed with the board in Results — see resume(). These
+            // are STRIDE's own transitions, not buttons.
+            restartFromResults -> if (to == FitPro.Mode.IDLE) {
+                restartFromResults = false
+                pendingWrite = mapOf(FitPro.Field.WORKOUT_MODE to FitPro.Mode.RUNNING.toDouble())
+                Log.i(TAG, "board back to idle — starting it again")
+            }
+            from == FitPro.Mode.RUNNING && to == FitPro.Mode.PAUSE && Session.isMoving(session) -> {
+                Log.i(TAG, "physical STOP — pausing")
+                holdForPause()
+            }
+            // From Pause, or from Results after a second STOP: either way the
+            // board is running again and the person asked for it.
+            to == FitPro.Mode.RUNNING && paused -> {
+                Log.i(TAG, "physical START — resuming at the board's own pace")
+                session = Session.ACTIVE
+                activeSince = SystemClock.elapsedRealtime()
+                askEnd = false
+            }
+            // Second STOP: the board ends its own workout into Results.
+            // Nothing is ended here — the person still chooses.
+            to == FitPro.Mode.RESULTS && (paused || Session.isMoving(session)) -> {
+                Log.i(TAG, "physical STOP while paused — asking whether to end")
+                if (!paused) holdForPause()
+                askEnd = true
+            }
+            // Third STOP, on the question: Results to Idle is the answer.
+            to == FitPro.Mode.IDLE && paused && askEnd -> {
+                Log.i(TAG, "physical STOP on the question — ending")
+                askEnd = false
+                finishWorkout()
+            }
+            to == FitPro.Mode.IDLE && (paused || Session.isMoving(session)) -> {
+                Log.i(TAG, "board went idle mid-workout — asking whether to end")
+                if (!paused) holdForPause()
+                askEnd = true
+            }
+        }
+    }
+
+    /** The bookkeeping half of a pause, for when the board has already stopped. */
+    private fun holdForPause() {
+        accumulatedMs += SystemClock.elapsedRealtime() - activeSince
+        session = Session.PAUSED
+        phaseEndsAt = 0L
+        if (targetKph > 0.0) pausedKph = targetKph
+        targetKph = 0.0
+        stopping = false
+        rampTo = 0.0
+        rampReason = ""
+    }
+
+    private var lastKey = 0
+
+    /**
+     * START pressed on the end-workout question, as a fresh press.
+     *
+     * The board ignores START in Results — it beeps and stays put — so the
+     * mode never shows it, and STRIDE answers it instead. STOP needs none of
+     * this: the board takes Results to Idle itself (see followButtons).
+     */
+    private fun startPressed(): Boolean {
+        val keys = listOf(FitPro.Field.KEY_OBJECT)
+        val r = conn.exchange(FitPro.readWrite(deviceId, keys)) ?: return false
+        if (FitPro.rejectReason(r, keys) != null) return false
+        val key = FitPro.keyCode(r)
+        val fresh = key == FitPro.Key.START && lastKey != FitPro.Key.START
+        lastKey = key
+        if (fresh) Log.i(TAG, "physical START on the question — resuming")
+        return fresh
+    }
+
+    /** Just the mode change, when there is one — see the poll loop. */
+    private fun modeAlone(w: Map<FitPro.Field, Double>): Map<FitPro.Field, Double> =
+        w[FitPro.Field.WORKOUT_MODE]?.let { mapOf(FitPro.Field.WORKOUT_MODE to it) } ?: w
+
     private fun enforceStopped(actualKph: Double): Map<FitPro.Field, Double>? {
         if (Session.isMoving(session)) return null
         if (actualKph < STOPPED_KPH) return null
@@ -2149,11 +2277,15 @@ class MainActivity : Activity() {
     }
 
     private fun resetSession() {
+        askEnd = false
+        restartFromResults = false
         accumulatedMs = 0L
         activeSince = SystemClock.elapsedRealtime()
         armBaseline = true
         sessionDistance = 0.0
         sessionCalories = 0.0
+        activeO2 = 0.0
+        o2Distance = 0.0
         maxSpeed = 0.0
         maxIncline = 0.0
         speedSum = 0.0
@@ -2501,10 +2633,16 @@ class MainActivity : Activity() {
                                queued.getValue(FitPro.Field.WORKOUT_MODE))
             }
 
-            val writes = enforceStopped(beltStillKph())
+            // The two stops below are not queued, so they get no `rest` — and
+            // need none. Pause mode is what stops the belt; the KPH 0 beside it
+            // is the field the Elite 900 refuses (its floor is 1.0 km/h), which
+            // took the PAUSE down with it on every frame. On 2026-10-17 that
+            // left the belt running for 38 minutes while enforceStopped sent
+            // {KPH 0, PAUSE} eleven thousand times.
+            val writes = enforceStopped(beltStillKph())?.let(::modeAlone)
                 ?: enforceLevel(lastActualGrade)
                 ?: enforceFanOff()
-                ?: queued ?: decelStep() ?: rampStep()
+                ?: queued ?: decelStep()?.let(::modeAlone) ?: rampStep()
 
             if (writes != null) lastWriteMs = SystemClock.elapsedRealtime()
             val reply = conn.exchange(FitPro.readWrite(deviceId, READS, writes ?: emptyMap()))
@@ -2640,6 +2778,9 @@ class MainActivity : Activity() {
 
             val snap = accumulate(v)
             lastSnap = snap
+            // Only while the question is up, so it costs a second exchange per
+            // poll for seconds at a time rather than for every walk.
+            if (askEnd && startPressed()) Bridge().resume()
             watchSlip(snap)
             ftms.update(snap)
             // Through repaint() rather than push(), so the session stamped on
@@ -2713,6 +2854,7 @@ class MainActivity : Activity() {
         if (keyOut) dmkLatched = true
         if (boardMode != null && boardMode != lastBoardMode) {
             Log.i(TAG, "board WorkoutMode -> $boardMode (${FitPro.Mode.name(boardMode)})")
+            followButtons(lastBoardMode, boardMode)
             lastBoardMode = boardMode
         }
         // Any mode but Sleep means the machine is up, however it got there —
@@ -2739,12 +2881,10 @@ class MainActivity : Activity() {
         }
 
         val rawDistance = v[FitPro.Field.DISTANCE] ?: 0.0
-        val rawCalories = v[FitPro.Field.CALORIES] ?: 0.0
         if (armBaseline) {
             baseDistance = rawDistance
-            baseCalories = rawCalories
             armBaseline = false
-            Log.i(TAG, "session baseline: d=$baseDistance c=$baseCalories")
+            Log.i(TAG, "session baseline: d=$baseDistance")
         }
 
         val actual = v[FitPro.Field.ACTUAL_KPH] ?: 0.0
@@ -2811,8 +2951,18 @@ class MainActivity : Activity() {
         val pulse = pulseNow(v[FitPro.Field.PULSE]?.toInt() ?: 0)
 
         if (Session.isMoving(session)) {
+            // The board zeroes its odometer when its own STOP takes it through
+            // Results to Idle, mid-walk as far as STRIDE knows. Re-anchor so
+            // the walk keeps what it had rather than restarting from 0.
+            if (rawDistance < baseDistance + sessionDistance - 1.0) {
+                baseDistance = rawDistance - sessionDistance
+                Log.i(TAG, "odometer went back to $rawDistance — carrying ${"%.0f".format(sessionDistance)} m over")
+            }
             sessionDistance = (rawDistance - baseDistance).coerceAtLeast(0.0)
-            sessionCalories = (rawCalories - baseCalories).coerceAtLeast(0.0)
+            val metres = sessionDistance - o2Distance
+            o2Distance = sessionDistance
+            if (metres > 0) activeO2 += Calories.o2PerMetre(speed, incline) * metres
+            sessionCalories = Calories.kcal(activeO2, walkerKg)
             if (speed > maxSpeed) maxSpeed = speed
             if (incline > maxIncline) maxIncline = incline
             speedSum += speed
@@ -2864,11 +3014,14 @@ class MainActivity : Activity() {
             distance = sessionDistance,
             elapsed = elapsedSec(),
             calories = sessionCalories,
+            caloriesTotal = sessionCalories + Calories.restingKcal(elapsedSec(), walkerKg),
+            caloriesOn = walkerKg > 0,
             pulse = pulse,
             fan = fanState,
             session = session,
             workout = workout,
             dmk = dmk,
+            askEnd = askEnd,
             ramping = if (rampTo > 0.0) rampReason else "",
             phaseLeft = phaseLeftSec(),
             boardMode = boardMode ?: -1,
@@ -3185,6 +3338,7 @@ class MainActivity : Activity() {
             session = session,
             workout = workout,
             dmk = dmk,
+            askEnd = askEnd,
             plan = planName,
             segments = steps.size,
             // Same rule accumulate() uses, so a repaint between two polls

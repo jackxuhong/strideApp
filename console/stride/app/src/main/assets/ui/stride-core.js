@@ -535,6 +535,8 @@ function adapt(raw) {
     session:  { elapsed: raw.elapsed || 0,
                 distance: distance,
                 calories: raw.calories || 0,
+                caloriesTotal: raw.caloriesTotal || 0,
+                caloriesOn: !!raw.caloriesOn,
                 climb: climbM,
                 laps: laps,
                 lapFraction: (distance % 400) / 400,
@@ -802,9 +804,12 @@ function flow(onStep) {
     reset: function () { return f.go('profile'); },
 
     setProfile: function (name) {
-      f.profile = name;
-      global.Stride.setWalker(name);
-      return f.go('control');
+      confirmWeight(name, function () {
+        f.profile = name;
+        global.Stride.setWalker(name);
+        f.go('control');
+      });
+      return f;
     },
 
     /* Three choices, not two: casual, one of the four shapes, or a route you
@@ -991,6 +996,50 @@ function people() {
   } catch (e) {
     return [];
   }
+}
+
+/**
+ * Calories as every UI shows them: active, with total small beside it (HTML), or a dash for a guest or
+ * anybody without a weight. See Calories.kt.
+ */
+function kcal(session) {
+  return session.caloriesOn
+    ? '<span style="white-space:nowrap">' + nf(session.calories) +
+      '<span style="font-size:.4em;opacity:.65"> / ' + nf(session.caloriesTotal) + '</span></span>'
+    : '\u2014';
+}
+
+/**
+ * Picking somebody with no weight warns that their calories will not be
+ * counted, and lets them walk anyway. Guests are not warned: they never get
+ * calories, which is the point of being a guest.
+ */
+function confirmWeight(name, go) {
+  var p = people().filter(function (x) { return x.name === name; })[0];
+  if (!p || p.weight_kg > 0) return go();
+  var o = document.createElement('div');
+  o.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;display:flex;align-items:center;' +
+    'justify-content:center;background:rgba(0,0,0,.72);font-family:inherit';
+  o.innerHTML =
+    '<div style="width:640px;padding:40px 44px;border-radius:24px;background:#141821;' +
+    'color:#eaf0ff;text-align:center;border:1px solid #2a3350">' +
+    '<div style="font-size:30px;margin-bottom:16px">No weight for ' + esc(name) + '</div>' +
+    '<div style="font-size:20px;line-height:1.5;color:#9aa8cc;margin-bottom:32px">' +
+    'Calories won\'t be counted on this walk. Add one in Settings ' +
+    '&rarr; People to have them counted.</div>' +
+    '<button data-k="back" style="font:inherit;font-size:22px;padding:18px 40px;' +
+    'margin:0 10px;border-radius:16px;background:none;color:#eaf0ff;' +
+    'border:1px solid #4a5578">BACK</button>' +
+    '<button data-k="go" style="font:inherit;font-size:22px;padding:18px 40px;' +
+    'margin:0 10px;border-radius:16px;background:rgba(57,224,255,.18);color:#eaf0ff;' +
+    'border:1px solid #39e0ff">CONTINUE</button></div>';
+  document.body.appendChild(o);
+  [].forEach.call(o.querySelectorAll('button'), function (b) {
+    tap(b, function () {
+      o.remove();
+      if (b.getAttribute('data-k') === 'go') go();
+    });
+  });
 }
 
 function defaultWalker() {
@@ -1398,7 +1447,8 @@ function demo(opts) {
       speed: speed, incline: guided ? step.incline : 1.5,
       targetSpeed: speed, targetIncline: guided ? step.incline : 1.5,
       distance: Math.round(dist), elapsed: Math.round(t),
-      calories: Math.round(cals), pulse: 0, fan: 2,
+      calories: Math.round(cals), caloriesTotal: Math.round(cals + t * 0.022),
+      caloriesOn: true, pulse: 0, fan: 2,
       workout: 'workout', dmk: q.dmk === '1',
       ramping: '', phaseLeft: phase === 'warmup' ? 161 : 0, boardMode: 2,
       avgSpeed: 5.2, maxSpeed: 6.1, avgIncline: 3.4, maxIncline: 9.5,
@@ -1557,6 +1607,8 @@ global.STRIDE = {
   UI_META: UI_META,
   people: people,
   defaultWalker: defaultWalker,
+  confirmWeight: confirmWeight,
+  kcal: kcal,
   uiList: uiList,
   currentUi: currentUi,
 

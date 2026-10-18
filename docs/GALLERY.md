@@ -48,11 +48,11 @@ Same walk in Pacer, drawn as a lane:
 
 On the treadmill's own screen. No config files, no rebuild.
 
-### Who walks
+### People
 Everyone gets their own totals. Coaching and recording are per person, and can
 be linked to a Home Assistant `person`.
 
-![Who walks](screenshots/settings-who-walks.png)
+![People](screenshots/settings-who-walks.png)
 
 ### Heart rate
 Bluetooth chest straps, using the standard heart rate service — the scan

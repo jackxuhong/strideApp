@@ -449,7 +449,7 @@ button{font-family:inherit;color:inherit;background:none;border:none;text-align:
         <span class="sub">Incline follows a profile. Speed stays yours.</span></button>
       <button class="bay gone" id="pickRoutes">
         <span class="nm">ROUTES</span>
-        <span class="sub">Ground you have walked, replayed by distance.</span></button>
+        <span class="sub">Ground you have covered, replayed by distance.</span></button>
     </div>
   </div>
 
@@ -534,7 +534,7 @@ button{font-family:inherit;color:inherit;background:none;border:none;text-align:
   <div class="tele">
     <div class="cell"><div class="k">ELAPSED</div><div class="v mono" id="elapsed">0:00</div></div>
     <div class="cell"><div class="k">DISTANCE</div><div class="v mono"><span id="dist">0.00</span><span class="u"> KM</span></div></div>
-    <div class="cell"><div class="k">CALORIES</div><div class="v mono" id="cals">0</div></div>
+    <div class="cell"><div class="k">KCAL ACTIVE / TOTAL</div><div class="v mono" id="cals">0</div></div>
     <div class="cell"><div class="k">CLIMBED</div><div class="v mono"><span id="climb">0</span><span class="u"> M</span></div></div>
     <div class="cell hr"><div class="k">HEART RATE</div><div class="v mono" id="pulse">&mdash;&mdash;</div></div>
   </div>
@@ -575,7 +575,7 @@ button{font-family:inherit;color:inherit;background:none;border:none;text-align:
   <div class="grid">
     <div class="cell"><div class="kk">TIME</div><div class="vv mono" id="sumTime">0:00</div></div>
     <div class="cell last"><div class="kk">DISTANCE</div><div class="vv mono"><span id="sumDist">0.00</span><span class="u"> KM</span></div></div>
-    <div class="cell"><div class="kk">CALORIES</div><div class="vv mono" id="sumCals">0</div></div>
+    <div class="cell"><div class="kk">KCAL ACTIVE / TOTAL</div><div class="vv mono" id="sumCals">0</div></div>
     <div class="cell last"><div class="kk">CLIMBED</div><div class="vv mono"><span id="sumClimb">0</span><span class="u"> M</span></div></div>
     <div class="cell"><div class="kk">AVG SPEED</div><div class="vv mono"><span id="sumAvg">0.0</span><span class="u"> KM/H</span></div></div>
     <div class="cell last"><div class="kk">MAX SPEED</div><div class="vv mono"><span id="sumMax">0.0</span><span class="u"> KM/H</span></div></div>
@@ -970,7 +970,7 @@ window.render = function(raw){
 
   $('elapsed').textContent = mmss(s.session.elapsed);
   $('dist').textContent    = STRIDE.km(s.session.distance);
-  $('cals').textContent    = nf(s.session.calories);
+  $('cals').innerHTML    = STRIDE.kcal(s.session);
   $('climb').textContent   = Math.round(s.session.climb);
   $('pulse').textContent   = s.session.pulse ? s.session.pulse : '——';
 
@@ -1090,7 +1090,7 @@ function renderSummary(s){
   $('sumCoach').textContent = s.summaryLine || '';
   $('sumTime').textContent  = mmss(s.session.elapsed);
   $('sumDist').textContent  = STRIDE.km(s.session.distance);
-  $('sumCals').textContent  = nf(s.session.calories);
+  $('sumCals').innerHTML  = STRIDE.kcal(s.session);
   $('sumAvg').textContent   = s.session.avgSpeed.toFixed(1);
   $('sumMax').textContent   = s.session.maxSpeed.toFixed(1);
   $('sumClimb').textContent = Math.round(s.session.climb);
