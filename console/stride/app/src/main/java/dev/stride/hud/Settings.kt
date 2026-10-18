@@ -137,12 +137,22 @@ class Settings(context: Context) {
          * be wrong for all but one of them.
          */
         val age: Int = 0,
+        /**
+         * Kilograms, or 0 for not given. Calories need it and are not shown
+         * without it — see [Calories]. Stored metric whatever the display
+         * units, like everything else the board measures.
+         */
+        val weightKg: Double = 0.0,
+        /** "m", "f", or empty for not given. Optional, and nothing needs it yet. */
+        val sex: String = "",
     ) {
         fun json(): JSONObject = JSONObject()
             .put("id", id).put("name", name)
             .put("coached", coached).put("publish", publish)
             .put("ha_person", haPerson)
             .put("age", age)
+            .put("weight_kg", weightKg)
+            .put("sex", sex)
 
         /**
          * Maximum heart rate, or 0 if unknown.
@@ -225,6 +235,8 @@ class Settings(context: Context) {
                     // Absent for everyone who existed before zones did, which
                     // is the same as declining to say — see Person.age.
                     age = o.optInt("age", 0),
+                    weightKg = o.optDouble("weight_kg", 0.0),
+                    sex = o.optString("sex"),
                 )
             }
         } catch (e: Exception) {

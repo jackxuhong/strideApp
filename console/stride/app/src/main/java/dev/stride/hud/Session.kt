@@ -84,7 +84,12 @@ data class Snapshot(
     val targetIncline: Double,
     val distance: Double,
     val elapsed: Double,
+    /** Active kcal: above resting. 0 when [caloriesOn] is false. */
     val calories: Double,
+    /** Active plus resting over the elapsed time. */
+    val caloriesTotal: Double = 0.0,
+    /** False for a guest or anyone without a weight — the UI shows a dash. */
+    val caloriesOn: Boolean = false,
     val pulse: Int,
     val fan: Int,
     val session: Int,
@@ -251,6 +256,8 @@ data class Snapshot(
         append("\"distance\":${"%.0f".format(distance)},")
         append("\"elapsed\":${"%.0f".format(elapsed)},")
         append("\"calories\":${"%.0f".format(calories)},")
+        append("\"caloriesTotal\":${"%.0f".format(caloriesTotal)},")
+        append("\"caloriesOn\":$caloriesOn,")
         append("\"pulse\":$pulse,")
         append("\"fan\":$fan,")
         append("\"workout\":\"${esc(workout)}\",")

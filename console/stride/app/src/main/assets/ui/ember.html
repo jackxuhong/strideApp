@@ -512,7 +512,7 @@ button{font-family:inherit;color:inherit;background:none;border:none;
     <div class="cell"><div class="k">Elapsed</div><div class="v" id="elapsed">0:00</div></div>
     <div class="cell"><div class="k">Distance</div><div class="v"><span id="dist">0.00</span><span class="u"> km</span></div></div>
     <div class="cell"><div class="k">Climbed</div><div class="v"><span id="climb">0</span><span class="u"> m</span></div></div>
-    <div class="cell"><div class="k">Calories</div><div class="v" id="cals">0</div></div>
+    <div class="cell"><div class="k">kcal active / total</div><div class="v" id="cals">0</div></div>
     <div class="cell hr" id="hrCell"><div class="k">Heart rate</div><div class="none" id="pulse">no reading</div></div>
   </div>
 
@@ -546,7 +546,7 @@ button{font-family:inherit;color:inherit;background:none;border:none;
   <div class="grid">
     <div class="cell"><div class="kk">TIME</div><div class="vv" id="sumTime">0:00</div></div>
     <div class="cell"><div class="kk">DISTANCE</div><div class="vv"><span id="sumDist">0.00</span><span class="u">km</span></div></div>
-    <div class="cell"><div class="kk">CALORIES</div><div class="vv" id="sumCals">0</div></div>
+    <div class="cell"><div class="kk">KCAL ACTIVE / TOTAL</div><div class="vv" id="sumCals">0</div></div>
     <div class="cell"><div class="kk">AVG SPEED</div><div class="vv" id="sumAvg">0.0</div></div>
     <div class="cell"><div class="kk">CLIMBED</div><div class="vv"><span id="sumClimb">0</span><span class="u">m</span></div></div>
   </div>
@@ -990,7 +990,7 @@ window.render = function(raw){
   $('elapsed').textContent = mmss(s.session.elapsed);
   $('dist').textContent    = STRIDE.km(s.session.distance);
   $('climb').textContent   = Math.round(s.session.climb);
-  $('cals').textContent    = nf(s.session.calories);
+  $('cals').innerHTML    = STRIDE.kcal(s.session);
   /* Class as well as text — see `.tele .hr.live`. */
   const bpm = s.session.pulse;
   $('hrCell').classList.toggle('live', bpm > 0);
@@ -1103,7 +1103,7 @@ function renderSummary(s){
     : 'A WORKOUT';
   $('sumTime').textContent  = mmss(s.session.elapsed);
   $('sumDist').textContent  = STRIDE.km(s.session.distance);
-  $('sumCals').textContent  = nf(s.session.calories);
+  $('sumCals').innerHTML  = STRIDE.kcal(s.session);
   $('sumAvg').textContent   = s.session.avgSpeed.toFixed(1);
   $('sumClimb').textContent = Math.round(s.session.climb);
   $('sumNote').textContent  = s.session.climb > 60

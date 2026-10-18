@@ -383,7 +383,6 @@ class MainActivity : Activity() {
             FitPro.Field.DISTANCE,
             FitPro.Field.CURRENT_TIME,
             FitPro.Field.PULSE,
-            FitPro.Field.CALORIES,
             // Read on the chance it is a different sensor from DISTANCE — see
             // Snapshot.rpm. It has only ever been asked for by probeSpeed(),
             // which runs once per app start and had already rolled out of the
@@ -538,7 +537,12 @@ class MainActivity : Activity() {
 
     private fun refreshWalkerHrMax() {
         walkerHrMax = cfg.person(walker)?.maxPulse ?: 0
+        // A guest is not in the list, so gets 0 and no calories.
+        walkerKg = cfg.person(walker)?.weightKg ?: 0.0
     }
+
+    /** The walker's weight, or 0 when there is none and calories are off. */
+    @Volatile private var walkerKg = 0.0
 
     // --- guided walk ---------------------------------------------------------
     /** Empty on a casual walk. Set once at START and never rewritten mid-walk. */
@@ -723,9 +727,12 @@ class MainActivity : Activity() {
      *  wherever they happened to be when START was pressed. */
     @Volatile private var armBaseline = false
     @Volatile private var baseDistance = 0.0
-    @Volatile private var baseCalories = 0.0
     @Volatile private var sessionDistance = 0.0
+    /** Active kcal, the figure history and Home Assistant get. See [Calories]. */
     @Volatile private var sessionCalories = 0.0
+    /** Oxygen above resting so far, ml/kg, and the odometer it was summed to. */
+    @Volatile private var activeO2 = 0.0
+    @Volatile private var o2Distance = 0.0
 
     // Rolling stats for the summary screen.
     @Volatile private var maxSpeed = 0.0
@@ -1328,6 +1335,25 @@ class MainActivity : Activity() {
             // uses come off a cached copy.
             refreshWalkerHrMax()
             Log.i(TAG, "settings: age for $name -> ${if (clean > 0) "$clean" else "not given"}")
+            return cfg.json().toString()
+        }
+
+        /** Kilograms; anything outside a plausible adult range clears it. */
+        @JavascriptInterface fun setPersonWeight(name: String, kg: Double): String {
+            val clean = if (kg in 30.0..250.0) kg else 0.0
+            cfg.savePeople(cfg.people().map {
+                if (it.name == name) it.copy(weightKg = clean) else it
+            })
+            refreshWalkerHrMax()
+            Log.i(TAG, "settings: weight for $name -> ${if (clean > 0) "$clean kg" else "not given"}")
+            return cfg.json().toString()
+        }
+
+        @JavascriptInterface fun setPersonSex(name: String, sex: String): String {
+            val clean = if (sex == "m" || sex == "f") sex else ""
+            cfg.savePeople(cfg.people().map {
+                if (it.name == name) it.copy(sex = clean) else it
+            })
             return cfg.json().toString()
         }
 
@@ -2158,6 +2184,8 @@ class MainActivity : Activity() {
         armBaseline = true
         sessionDistance = 0.0
         sessionCalories = 0.0
+        activeO2 = 0.0
+        o2Distance = 0.0
         maxSpeed = 0.0
         maxIncline = 0.0
         speedSum = 0.0
@@ -2749,12 +2777,10 @@ class MainActivity : Activity() {
         }
 
         val rawDistance = v[FitPro.Field.DISTANCE] ?: 0.0
-        val rawCalories = v[FitPro.Field.CALORIES] ?: 0.0
         if (armBaseline) {
             baseDistance = rawDistance
-            baseCalories = rawCalories
             armBaseline = false
-            Log.i(TAG, "session baseline: d=$baseDistance c=$baseCalories")
+            Log.i(TAG, "session baseline: d=$baseDistance")
         }
 
         val actual = v[FitPro.Field.ACTUAL_KPH] ?: 0.0
@@ -2829,7 +2855,10 @@ class MainActivity : Activity() {
                 Log.i(TAG, "odometer went back to $rawDistance — carrying ${"%.0f".format(sessionDistance)} m over")
             }
             sessionDistance = (rawDistance - baseDistance).coerceAtLeast(0.0)
-            sessionCalories = (rawCalories - baseCalories).coerceAtLeast(0.0)
+            val metres = sessionDistance - o2Distance
+            o2Distance = sessionDistance
+            if (metres > 0) activeO2 += Calories.o2PerMetre(speed, incline) * metres
+            sessionCalories = Calories.kcal(activeO2, walkerKg)
             if (speed > maxSpeed) maxSpeed = speed
             if (incline > maxIncline) maxIncline = incline
             speedSum += speed
@@ -2881,6 +2910,8 @@ class MainActivity : Activity() {
             distance = sessionDistance,
             elapsed = elapsedSec(),
             calories = sessionCalories,
+            caloriesTotal = sessionCalories + Calories.restingKcal(elapsedSec(), walkerKg),
+            caloriesOn = walkerKg > 0,
             pulse = pulse,
             fan = fanState,
             session = session,

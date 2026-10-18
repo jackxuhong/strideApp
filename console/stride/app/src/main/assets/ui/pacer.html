@@ -506,7 +506,7 @@ button{font-family:inherit;color:inherit;background:none;border:none;text-align:
   <div class="tele">
     <div class="cell"><div class="k">TIME</div><div class="v" id="elapsed">0:00</div></div>
     <div class="cell"><div class="k">DISTANCE</div><div class="v"><span id="dist">0.00</span><span class="u"> km</span></div></div>
-    <div class="cell"><div class="k">BURNED</div><div class="v"><span id="cals">0</span><span class="u"> kcal</span></div></div>
+    <div class="cell"><div class="k">ACTIVE / TOTAL</div><div class="v"><span id="cals">0</span><span class="u"> kcal</span></div></div>
     <div class="cell"><div class="k">CLIMBED</div><div class="v"><span id="climb">0</span><span class="u"> m</span></div></div>
   </div>
 
@@ -545,7 +545,7 @@ button{font-family:inherit;color:inherit;background:none;border:none;text-align:
   <div class="grid">
     <div class="cell"><div class="kk">TIME</div><div class="vv" id="sumTime">0:00</div></div>
     <div class="cell"><div class="kk">DISTANCE</div><div class="vv" id="sumDist">0.00</div></div>
-    <div class="cell"><div class="kk">BURNED</div><div class="vv" id="sumCals">0</div></div>
+    <div class="cell"><div class="kk">KCAL ACTIVE / TOTAL</div><div class="vv" id="sumCals">0</div></div>
     <div class="cell"><div class="kk">CLIMBED</div><div class="vv" id="sumClimb">0</div></div>
   </div>
   <div class="foot">
@@ -956,7 +956,7 @@ window.render = function(raw){
 
   $('elapsed').textContent = mmss(s.session.elapsed);
   $('dist').textContent    = STRIDE.km(s.session.distance);
-  $('cals').textContent    = nf(s.session.calories);
+  $('cals').innerHTML    = STRIDE.kcal(s.session);
   $('climb').textContent   = Math.round(s.session.climb);
 
   $('fanLab').textContent  = STRIDE.fanLabel(s.fan);
@@ -1070,7 +1070,7 @@ function renderSummary(s){
   $('sumCoach').textContent = s.summaryLine || '';
   $('sumTime').textContent  = mmss(s.session.elapsed);
   $('sumDist').textContent  = STRIDE.km(s.session.distance);
-  $('sumCals').textContent  = nf(s.session.calories);
+  $('sumCals').innerHTML  = STRIDE.kcal(s.session);
   $('sumClimb').textContent = Math.round(s.session.climb) + ' m';
   $('sumNote').textContent  = s.session.climb > 60 ? 'A proper hill’s worth of climbing.' : '';
 }

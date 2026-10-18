@@ -571,7 +571,7 @@ button.pulse{animation:pulse .9s ease-out 2}
   <div class="strip">
     <div class="metric"><div class="k">Elapsed</div><div class="v" id="elapsed">0:00</div></div>
     <div class="metric"><div class="k">Distance</div><div class="v"><span id="distance">0</span><small>m</small></div></div>
-    <div class="metric"><div class="k">Calories</div><div class="v"><span id="calories">0</span><small>kcal</small></div></div>
+    <div class="metric"><div class="k">Active / total</div><div class="v"><span id="calories">0</span><small>kcal</small></div></div>
     <div class="metric"><div class="k">Heart rate</div><div class="v"><span id="pulse">—</span><small>bpm</small></div></div>
   </div>
 
@@ -606,7 +606,7 @@ button.pulse{animation:pulse .9s ease-out 2}
     <div class="cards">
       <div class="card"><div class="k">Time</div><div class="v" id="sumTime">0:00</div></div>
       <div class="card"><div class="k">Distance</div><div class="v"><span id="sumDist">0</span><small>m</small></div></div>
-      <div class="card"><div class="k">Calories</div><div class="v"><span id="sumCal">0</span><small>kcal</small></div></div>
+      <div class="card"><div class="k">Active / total</div><div class="v"><span id="sumCal">0</span><small>kcal</small></div></div>
       <div class="card"><div class="k">Avg speed</div><div class="v"><span id="sumAvg">0.0</span><small>km/h</small></div></div>
       <div class="card"><div class="k">Max speed</div><div class="v"><span id="sumMax">0.0</span><small>km/h</small></div></div>
       <div class="card"><div class="k">Avg incline</div><div class="v"><span id="sumInc">0.0</span><small>%</small></div></div>
@@ -698,6 +698,10 @@ function ack(btn){
 let walker = STRIDE.defaultWalker();
 
 function pickWalker(name){
+  STRIDE.confirmWeight(name, () => chooseWalker(name));
+}
+
+function chooseWalker(name){
   walker = name;
   $('whoName').textContent = name || 'Guest';
   Stride.setWalker(name);
@@ -1536,7 +1540,7 @@ window.render = function(s){
 
   $('elapsed').textContent  = mmss(s.elapsed ?? 0);
   $('distance').textContent = nf(s.distance ?? 0);
-  $('calories').textContent = nf(s.calories ?? 0);
+  $('calories').innerHTML = STRIDE.kcal(s);
   $('pulse').textContent    = s.pulse ? s.pulse : '—';
 
   // 0..19 km/h and -3..+12 % mapped onto 10 ticks each
@@ -1687,7 +1691,7 @@ function renderSummary(s){
   $('sumSub').textContent  = kind + ' complete';
   $('sumTime').textContent = mmss(s.elapsed ?? 0);
   $('sumDist').textContent = nf(s.distance ?? 0);
-  $('sumCal').textContent  = nf(s.calories ?? 0);
+  $('sumCal').innerHTML  = STRIDE.kcal(s);
   $('sumAvg').textContent  = (s.avgSpeed ?? 0).toFixed(1);
   $('sumMax').textContent  = (s.maxSpeed ?? 0).toFixed(1);
   $('sumInc').textContent  = (s.avgIncline ?? 0).toFixed(1);
