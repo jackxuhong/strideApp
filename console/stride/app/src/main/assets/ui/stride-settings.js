@@ -267,7 +267,10 @@
     var s = el('div', 'sx-step');
     var v = el('div', 'sx-v');
     var draw = function () {
-      v.innerHTML = value.toFixed(dp || 0) + '<small>' + unit + '</small>';
+      // Stored in km/h whatever the units; only what is drawn follows them.
+      var mph = unit === 'km/h' && S.units === 'mi';
+      v.innerHTML = (mph ? value / 1.609344 : value).toFixed(dp || 0) +
+        '<small>' + (mph ? 'mph' : unit) + '</small>';
     };
     var bump = function (d) {
       value = Math.min(max, Math.max(min, value + d * inc));
@@ -910,8 +913,8 @@
       el('div', 'sx-ro', '<b>' + lim.minGrade.toFixed(1) + '</b> to <b>+' +
         lim.maxGrade.toFixed(1) + '</b> %')));
     g4.appendChild(row('Speed range', '',
-      el('div', 'sx-ro', '<b>' + lim.minKph.toFixed(1) + '</b> to <b>' +
-        lim.maxKph.toFixed(1) + '</b> km/h')));
+      el('div', 'sx-ro', '<b>' + global.STRIDE.spd(lim.minKph).toFixed(1) + '</b> to <b>' +
+        global.STRIDE.spd(lim.maxKph).toFixed(1) + '</b> ' + global.STRIDE.su())));
     sc.appendChild(g4);
   }
 
@@ -1055,10 +1058,10 @@
 
     var g = group(routes.length + (routes.length === 1 ? ' route' : ' routes'));
     routes.forEach(function (r) {
-      var km = ((r.distance_m || 0) / 1000).toFixed(2);
-      var climb = Math.round(r.climb_m || 0);
+      var C = global.STRIDE;
       var changes = (r.segments || []).length;
-      var desc = km + ' km · ' + climb + ' m of climb · ' + changes +
+      var desc = C.km(r.distance_m) + ' ' + C.du() + ' · ' + C.climb(r.climb_m) + ' ' + C.cu() +
+                 ' of climb · ' + changes +
                  ' incline changes';
       if (r.difficulty && r.difficulty !== 1) {
         desc += ' · at ' + Math.round(r.difficulty * 100) + '%';

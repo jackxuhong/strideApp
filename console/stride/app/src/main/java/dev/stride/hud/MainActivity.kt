@@ -920,6 +920,10 @@ class MainActivity : Activity() {
          */
         @JavascriptInterface fun routes(): String = routes.json()
 
+        /** One person's recorded workouts, newest first, for the history list. */
+        @JavascriptInterface fun history(name: String): String =
+            org.json.JSONArray(history.recent(name, History.KEEP).map { it.json() }).toString()
+
         /**
          * Start a walk on a recorded route.
          *

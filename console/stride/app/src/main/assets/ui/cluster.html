@@ -489,7 +489,7 @@ button{font-family:inherit;color:inherit;background:none;border:none;text-align:
       <circle id="spdTick" cx="150" cy="150" r="120" fill="none" stroke="#e5b567" stroke-width="12"
               pathLength="1000" stroke-dasharray="0 1000" transform="rotate(-90 150 150)"/>
     </svg>
-    <div class="k">SPEED KM/H</div>
+    <div class="k" data-u>SPEED KM/H</div>
     <div class="v mono" id="speed">0.0</div>
     <div class="n mono" id="suggest"></div>
   </div>
@@ -533,9 +533,9 @@ button{font-family:inherit;color:inherit;background:none;border:none;text-align:
 
   <div class="tele">
     <div class="cell"><div class="k">ELAPSED</div><div class="v mono" id="elapsed">0:00</div></div>
-    <div class="cell"><div class="k">DISTANCE</div><div class="v mono"><span id="dist">0.00</span><span class="u"> KM</span></div></div>
+    <div class="cell"><div class="k">DISTANCE</div><div class="v mono"><span id="dist">0.00</span><span class="u" data-u> KM</span></div></div>
     <div class="cell"><div class="k">KCAL ACTIVE / TOTAL</div><div class="v mono" id="cals">0</div></div>
-    <div class="cell"><div class="k">CLIMBED</div><div class="v mono"><span id="climb">0</span><span class="u"> M</span></div></div>
+    <div class="cell"><div class="k">CLIMBED</div><div class="v mono"><span id="climb">0</span><span class="u" data-u> M</span></div></div>
     <div class="cell hr"><div class="k">HEART RATE</div><div class="v mono" id="pulse">&mdash;&mdash;</div></div>
   </div>
 
@@ -574,11 +574,11 @@ button{font-family:inherit;color:inherit;background:none;border:none;text-align:
   <div class="sumcoach" id="sumCoach"></div>
   <div class="grid">
     <div class="cell"><div class="kk">TIME</div><div class="vv mono" id="sumTime">0:00</div></div>
-    <div class="cell last"><div class="kk">DISTANCE</div><div class="vv mono"><span id="sumDist">0.00</span><span class="u"> KM</span></div></div>
+    <div class="cell last"><div class="kk">DISTANCE</div><div class="vv mono"><span id="sumDist">0.00</span><span class="u" data-u> KM</span></div></div>
     <div class="cell"><div class="kk">KCAL ACTIVE / TOTAL</div><div class="vv mono" id="sumCals">0</div></div>
-    <div class="cell last"><div class="kk">CLIMBED</div><div class="vv mono"><span id="sumClimb">0</span><span class="u"> M</span></div></div>
-    <div class="cell"><div class="kk">AVG SPEED</div><div class="vv mono"><span id="sumAvg">0.0</span><span class="u"> KM/H</span></div></div>
-    <div class="cell last"><div class="kk">MAX SPEED</div><div class="vv mono"><span id="sumMax">0.0</span><span class="u"> KM/H</span></div></div>
+    <div class="cell last"><div class="kk">CLIMBED</div><div class="vv mono"><span id="sumClimb">0</span><span class="u" data-u> M</span></div></div>
+    <div class="cell"><div class="kk">AVG SPEED</div><div class="vv mono"><span id="sumAvg">0.0</span><span class="u" data-u> KM/H</span></div></div>
+    <div class="cell last"><div class="kk">MAX SPEED</div><div class="vv mono"><span id="sumMax">0.0</span><span class="u" data-u> KM/H</span></div></div>
   </div>
 
   <div class="heart" id="sumHeart">
@@ -750,10 +750,11 @@ function renderPlan() {
          an out-and-back's ascent is the outbound climb *plus* the outbound
          descent, and is not twice anything. */
       const on = flow.looped(r.id);
-      const km = (r.distance_m || 0) / 1000 * (on ? 2 : 1);
+      const km = (r.distance_m || 0) * (on ? 2 : 1);
       const up = on ? STRIDE.loopedClimb(r) : (r.climb_m || 0);
       bay((r.name || 'Route').toUpperCase(),
-          km.toFixed(2) + ' KM · CLIMB ' + Math.round(up) + ' M' +
+          STRIDE.km(km) + ' ' + STRIDE.du().toUpperCase() + ' · CLIMB ' +
+            STRIDE.climb(up) + ' ' + STRIDE.cu().toUpperCase() +
             (on ? ' · BOTH WAYS' : ''),
           pts, r.id === flow.route, () => flow.setRoute(r.id), r.id);
     });
@@ -764,9 +765,9 @@ function renderPlan() {
     const hi = Math.max.apply(null, s.points);
     // 30 minutes at 5 km/h is 2500 m of run; mean grade over that is the gain.
     const mean = s.points.reduce((a, v) => a + v, 0) / s.points.length;
-    const gain = Math.round(2500 * mean / 100);
+    const gain = 2500 * mean / 100;
     bay(s.name.toUpperCase(),
-        'PEAK ' + hi.toFixed(1) + '% · GAIN ' + gain + ' M',
+        'PEAK ' + hi.toFixed(1) + '% · GAIN ' + STRIDE.climb(gain) + ' ' + STRIDE.cu().toUpperCase(),
         s.points, s.id === flow.shape, () => flow.setShape(s.id));
   });
 }
@@ -834,8 +835,8 @@ tap($('btnEnd'),    () => { $('paused').classList.remove('on'); Stride.end(); })
 tap($('btnDone'),   () => Stride.home());
 tap($('btnFan'),    () => Stride.fan());
 
-STRIDE.stepper($('btnSpeedUp'),     d => Stride.speed(d),    0.1, 0.5);
-STRIDE.stepper($('btnSpeedDown'),   d => Stride.speed(-d),   0.1, 0.5);
+STRIDE.stepper($('btnSpeedUp'),     d => Stride.speed(STRIDE.toKph(d)),    0.1, 0.5);
+STRIDE.stepper($('btnSpeedDown'),   d => Stride.speed(-STRIDE.toKph(d)),   0.1, 0.5);
 STRIDE.stepper($('btnInclineUp'),   d => Stride.incline(d),  0.5, 0.5);
 STRIDE.stepper($('btnInclineDown'), d => Stride.incline(-d), 0.5, 0.5);
 STRIDE.hold($('btnKeyBack'), 2000, () => Stride.ackDmk(),
@@ -951,7 +952,7 @@ window.render = function(raw){
 
   /* Both needles come off the belt controller, never off the setpoint. */
   $('incline').textContent = s.belt.incline.toFixed(1);
-  $('speed').textContent   = s.belt.speed.toFixed(1);
+  $('speed').textContent   = STRIDE.spd(s.belt.speed).toFixed(1);
   $('incArc').setAttribute('stroke-dasharray',
     dash(s.belt.incline / INCLINE_FULL));
   $('spdArc').setAttribute('stroke-dasharray',
@@ -964,14 +965,14 @@ window.render = function(raw){
      console may act on it — the pace belongs to whoever is on the belt. */
   const suggesting = guided && s.targets.suggest > 0 && !timed;
   suggestKph = suggesting ? s.targets.suggest : 0;
-  $('suggest').textContent = suggesting ? 'TGT ' + s.targets.suggest.toFixed(1) : '';
+  $('suggest').textContent = suggesting ? 'TGT ' + STRIDE.spd(s.targets.suggest).toFixed(1) : '';
   $('spdTick').setAttribute('stroke-dasharray',
     suggesting ? tick(s.targets.suggest / SPEED_FULL) : '0 1000');
 
   $('elapsed').textContent = mmss(s.session.elapsed);
   $('dist').textContent    = STRIDE.km(s.session.distance);
   $('cals').innerHTML    = STRIDE.kcal(s.session);
-  $('climb').textContent   = Math.round(s.session.climb);
+  $('climb').textContent   = STRIDE.climb(s.session.climb);
   $('pulse').textContent   = s.session.pulse ? s.session.pulse : '——';
 
   $('fanLab').textContent  = s.fan + '/4';
@@ -997,8 +998,8 @@ window.render = function(raw){
     $('pausedAt').textContent = mmss(s.session.elapsed);
     $('pausedWhere').textContent = guided && s.segment.count
       ? 'SEG ' + s.segment.index + '/' + s.segment.count + ' · ' +
-        STRIDE.km(s.session.distance) + ' KM'
-      : STRIDE.km(s.session.distance) + ' KM';
+        STRIDE.km(s.session.distance) + ' ' + STRIDE.du().toUpperCase()
+      : STRIDE.km(s.session.distance) + ' ' + STRIDE.du().toUpperCase();
   }
 };
 
@@ -1091,9 +1092,9 @@ function renderSummary(s){
   $('sumTime').textContent  = mmss(s.session.elapsed);
   $('sumDist').textContent  = STRIDE.km(s.session.distance);
   $('sumCals').innerHTML  = STRIDE.kcal(s.session);
-  $('sumAvg').textContent   = s.session.avgSpeed.toFixed(1);
-  $('sumMax').textContent   = s.session.maxSpeed.toFixed(1);
-  $('sumClimb').textContent = Math.round(s.session.climb);
+  $('sumAvg').textContent   = STRIDE.spd(s.session.avgSpeed).toFixed(1);
+  $('sumMax').textContent   = STRIDE.spd(s.session.maxSpeed).toFixed(1);
+  $('sumClimb').textContent = STRIDE.climb(s.session.climb);
   renderHeartPanel(s);
   renderBadges(s);
 }
