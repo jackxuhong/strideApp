@@ -521,9 +521,7 @@ function adapt(raw) {
                    The first route walked rendered a 275 m opening stretch as
                    "4:35 left" — the number was the distance, read as a clock. */
                 leftLabel: raw.segmentLeftIsDistance
-                  ? (raw.segmentLeft >= 1000
-                       ? (raw.segmentLeft / 1000).toFixed(2) + ' km'
-                       : Math.round(raw.segmentLeft || 0) + ' m')
+                  ? dist(raw.segmentLeft || 0)
                   : mmss(raw.segmentLeft || 0),
                 nextName: raw.nextLabel || '',
                 nextIncline: raw.nextIncline || 0 },
@@ -797,6 +795,7 @@ function flow(onStep) {
 
     go: function (step) {
       f.step = step;
+      if (step === 'control') historyButton(document.getElementById('stControl'), f.profile);
       if (onStep) onStep(step, f);
       return f;
     },
@@ -1042,6 +1041,100 @@ function confirmWeight(name, go) {
   });
 }
 
+/**
+ * The HISTORY button on the step after picking somebody. It is the UI's own
+ * BACK button, copied and mirrored to the right, so it looks native in all five
+ * without five sets of CSS. It lives inside the step's element, so it goes when
+ * the step does and can never be left on screen over a workout. Guests have no
+ * history, so they get no button.
+ */
+function historyButton(stepEl, name) {
+  var back = document.getElementById('btnBack');
+  if (!stepEl || !back) return;
+  var b = stepEl.querySelector('.sx-history');
+  if (!b) {
+    b = document.createElement('button');
+    b.className = back.className.replace(/\bgone\b/, '') + ' sx-history';
+    b.innerHTML = back.innerHTML.replace(/\u2190\s*/, '').replace('BACK', 'HISTORY');
+    var cs = getComputedStyle(back);
+    b.style.cssText = 'position:absolute;left:auto;right:' + cs.left + ';top:' + cs.top +
+      ';bottom:' + cs.bottom;
+    tap(b, function () { showHistory(b.getAttribute('data-who')); });
+    stepEl.appendChild(b);
+  }
+  b.setAttribute('data-who', name || '');
+  var known = people().some(function (p) { return p.name === name; });
+  b.style.display = known ? '' : 'none';
+}
+
+/** Somebody's recorded workouts, newest first; [] when there are none. */
+function pastWorkouts(name) {
+  try { return JSON.parse(global.Stride.history(name) || '[]'); }
+  catch (e) { return []; }
+}
+
+/**
+ * Past workouts as a full-screen list. What History.kt keeps: workouts shorter
+ * than 300 m or 3 minutes are not recorded, and neither are guests.
+ */
+function showHistory(name) {
+  var walks = pastWorkouts(name);
+  readUnits();
+  var unit = du();
+  var DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var MONS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var when = function (t) {
+    if (!(t > 0)) return 'Undated';  // see MainActivity.sessionStartWall
+    var d = new Date(t), m = d.getMinutes();
+    return DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONS[d.getMonth()] + ' ' +
+      (d.getFullYear() !== new Date().getFullYear() ? d.getFullYear() + ' ' : '') +
+      d.getHours() + ':' + (m < 10 ? '0' : '') + m;
+  };
+  var total = walks.reduce(function (a, w) { return a + w.distance; }, 0);
+  var secs = walks.reduce(function (a, w) { return a + w.elapsed; }, 0);
+
+  var td = 'padding:14px 12px;border-top:1px solid #2a3350;text-align:right;white-space:nowrap';
+  var th = 'padding:0 12px 10px;text-align:right;font-weight:normal;color:#9aa8cc;font-size:15px;' +
+    'letter-spacing:.1em';
+  var rows = walks.map(function (w) {
+    return '<tr><td style="' + td + ';text-align:left">' + when(w.startedAt) +
+      '<div style="font-size:15px;color:#9aa8cc">' + esc(w.plan || 'Casual') + '</div></td>' +
+      '<td style="' + td + '">' + mmss(w.elapsed) + '</td>' +
+      '<td style="' + td + '">' + km(w.distance) + '</td>' +
+      '<td style="' + td + '">' + spd(w.avgSpeed).toFixed(1) + '</td>' +
+      '<td style="' + td + '">' + (w.climbM ? nf(climb(w.climbM)) + ' ' + cu() : '—') + '</td>' +
+      '<td style="' + td + '">' + (w.calories ? nf(w.calories) : '—') + '</td>' +
+      '<td style="' + td + '">' + (w.avgPulse || '—') + '</td></tr>';
+  }).join('');
+
+  var o = document.createElement('div');
+  o.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;display:flex;align-items:center;' +
+    'justify-content:center;background:rgba(0,0,0,.72);font-family:inherit';
+  o.innerHTML =
+    '<div style="width:1000px;max-height:90%;display:flex;flex-direction:column;padding:32px 40px;' +
+    'border-radius:24px;background:#141821;color:#eaf0ff;border:1px solid #2a3350;box-sizing:border-box">' +
+    '<div style="display:flex;align-items:baseline;margin-bottom:20px">' +
+    '<div style="font-size:30px;flex:1">' + esc(name) + '</div>' +
+    '<div style="font-size:18px;color:#9aa8cc">' + walks.length +
+    (walks.length === 1 ? ' workout' : ' workouts') + ' · ' + km(total) + ' ' + unit +
+    ' · ' + mmss(secs) + '</div></div>' +
+    (walks.length
+      ? '<div style="flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;font-size:20px">' +
+        '<table style="width:100%;border-collapse:collapse"><tr>' +
+        '<th style="' + th + ';text-align:left">WHEN</th><th style="' + th + '">TIME</th>' +
+        '<th style="' + th + '">' + unit.toUpperCase() + '</th><th style="' + th + '">AVG ' +
+        su().toUpperCase() + '</th><th style="' + th + '">CLIMB</th>' +
+        '<th style="' + th + '">KCAL</th><th style="' + th + '">BPM</th></tr>' + rows + '</table></div>'
+      : '<div style="font-size:20px;line-height:1.5;color:#9aa8cc;padding:40px 0;text-align:center">' +
+        'Nothing recorded yet. Workouts of at least ' + (miles ? '0.2 mi' : '300 m') +
+        ' and 3 minutes are kept here.</div>') +
+    '<div style="text-align:center;margin-top:24px"><button style="font:inherit;font-size:22px;' +
+    'padding:18px 56px;border-radius:16px;background:none;color:#eaf0ff;' +
+    'border:1px solid #4a5578">CLOSE</button></div></div>';
+  document.body.appendChild(o);
+  tap(o.querySelector('button'), function () { o.remove(); });
+}
+
 function defaultWalker() {
   try {
     return JSON.parse(global.Stride.settingsJson()).default_walker || '';
@@ -1179,9 +1272,58 @@ function nf(n) {
   return String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
-/** Metres to km. Two decimals by default: at walking pace one decimal sits
- *  still for two minutes at a time, which reads as a frozen display. */
-function km(m, dp) { return ((m || 0) / 1000).toFixed(dp == null ? 2 : dp); }
+/* Settings → Units. Everything below Kotlin is metric; these convert at the
+   last moment, for display only. Read once and again whenever settings close,
+   because render runs several times a second. */
+var MI_M = 1609.344, FT_M = 0.3048;
+var miles = false;
+function readUnits() {
+  try { miles = JSON.parse(global.Stride.settingsJson()).units === 'mi'; } catch (e) { miles = false; }
+}
+function isMi() { return miles; }
+
+/** Metres to km, or to miles when Units is Miles. Two decimals by default: at
+ *  walking pace one decimal sits still for two minutes at a time, which reads
+ *  as a frozen display. */
+function km(m, dp) { return ((m || 0) / (miles ? MI_M : 1000)).toFixed(dp == null ? 2 : dp); }
+/** km/h to the display unit, as a number. */
+function spd(kph) { return miles ? (kph || 0) * 1000 / MI_M : (kph || 0); }
+/** A speed change from a button, in display units, back to km/h for Kotlin. */
+function toKph(d) { return miles ? d * MI_M / 1000 : d; }
+/** Metres climbed, rounded, in metres or feet. */
+function climb(m) { return Math.round(miles ? (m || 0) / FT_M : (m || 0)); }
+/** A distance with its unit: "640 m" or "1.25 km", or "0.40 mi". */
+function dist(m) {
+  return miles || m >= 1000 ? km(m) + ' ' + du() : nf(m) + ' m';
+}
+function du() { return miles ? 'mi' : 'km'; }
+function su() { return miles ? 'mph' : 'km/h'; }
+function cu() { return miles ? 'ft' : 'm'; }
+
+/**
+ * Relabel every element marked `data-u` for the current units, keeping its
+ * case. Its markup holds the metric text, which is kept in data-uo, so it can
+ * be switched back. A number in front of km/h ("2 km/h") is converted too.
+ * A bare "m" is climb (feet), unless the element says data-u="dist" (miles).
+ */
+function units(root) {
+  readUnits();
+  [].forEach.call((root || document).querySelectorAll('[data-u]'), function (el) {
+    var t = el.getAttribute('data-uo');
+    if (t == null) { t = el.textContent; el.setAttribute('data-uo', t); }
+    if (miles) {
+      var up = t === t.toUpperCase();
+      t = t.replace(/(\d+(?:\.\d+)?)\s*km\/h/gi, function (_, n) {
+              return spd(+n).toFixed(1) + ' km/h'; })
+           .replace(/km\/h/gi, 'mph').replace(/\bkm\b/gi, 'mi')
+           .replace(/\bm\b/gi, el.getAttribute('data-u') === 'dist' ? 'mi' : 'ft');
+      if (up) t = t.toUpperCase();
+    }
+    el.textContent = t;
+  });
+}
+document.addEventListener('stride-settings-closed', function () { units(); });
+document.addEventListener('DOMContentLoaded', function () { units(); });
 
 var FAN_NAMES = ['OFF', 'LOW', 'MEDIUM', 'HIGH', 'AUTO'];
 function fanName(n) { return FAN_NAMES[n] || 'OFF'; }
@@ -1248,6 +1390,17 @@ function stub() {
         climb_m: 68, difficulty: 1.0,
         segments: [[0,200,6],[200,700,8],[700,1100,5],[1100,1600,2],
                    [1600,2100,-2],[2100,2500,-3],[2500,3030,0]] }
+    ]);
+  };
+  var day = 86400000, now = Date.now();
+  s.history = function () {
+    return JSON.stringify([
+      { startedAt: now - day / 3, elapsed: 1945, distance: 4101, calories: 299, climbM: 0,
+        avgSpeed: 7.6, avgPulse: 0, plan: '' },
+      { startedAt: now - 3 * day, elapsed: 1800, distance: 3389, calories: 306, climbM: 84,
+        avgSpeed: 6.8, avgPulse: 128, plan: 'Rolling hills' },
+      { startedAt: now - 4 * day, elapsed: 2710, distance: 5060, calories: 0, climbM: 18,
+        avgSpeed: 6.7, avgPulse: 0, plan: 'Friday river loop' }
     ]);
   };
   global.Stride = s;
@@ -1608,6 +1761,8 @@ global.STRIDE = {
   people: people,
   defaultWalker: defaultWalker,
   confirmWeight: confirmWeight,
+  historyButton: historyButton,
+  showHistory: showHistory,
   kcal: kcal,
   uiList: uiList,
   currentUi: currentUi,
@@ -1622,6 +1777,15 @@ global.STRIDE = {
   mmss: mmss,
   nf: nf,
   km: km,
+  dist: dist,
+  spd: spd,
+  toKph: toKph,
+  climb: climb,
+  du: du,
+  su: su,
+  cu: cu,
+  isMi: isMi,
+  units: units,
   durationLabel: durationLabel,
   fanName: fanName,
   fanLabel: fanLabel,
