@@ -797,7 +797,14 @@ function flow(onStep) {
       f.step = step;
       if (step === 'control') historyButton(document.getElementById('stControl'), f.profile);
       if (onStep) onStep(step, f);
+      f.syncReverse();
       return f;
+    },
+
+    /* REVERSED beside BEGIN, once there is a route to walk the other way. */
+    syncReverse: function () {
+      reverseButton(f.step === 'plan' && f.pickingRoute() && !!f.route,
+                    function () { f.commit(true); });
     },
 
     reset: function () { return f.go('profile'); },
@@ -835,6 +842,7 @@ function flow(onStep) {
     setRoute: function (id) {
       if (id !== f.route) f.loop = false;
       f.route = id;
+      f.syncReverse();
       return f;
     },
 
@@ -843,6 +851,7 @@ function flow(onStep) {
     toggleLoop: function (id) {
       f.loop = id === f.route ? !f.loop : true;
       f.route = id;
+      f.syncReverse();
       return f;
     },
 
@@ -858,12 +867,12 @@ function flow(onStep) {
     setMinutes: function (m) { f.minutes = m; return f; },
     setShape:   function (s) { f.shape = s;   return f; },
 
-    /** The one call that arms the belt. */
-    commit: function () {
+    /** The one call that arms the belt. `reverse` walks a route from its far end. */
+    commit: function (reverse) {
       if (f.control === 'casual') { global.Stride.choose(); return f; }
       if (f.control === 'routes') {
         // Nothing to arm the belt with if no route was picked.
-        if (f.route) global.Stride.chooseRoute(f.route, f.loop);
+        if (f.route) global.Stride.chooseRoute(f.route, f.loop, !!reverse);
         return f;
       }
       global.Stride.chooseGuided(f.shape, f.minutes);
@@ -1065,6 +1074,31 @@ function historyButton(stepEl, name) {
   b.setAttribute('data-who', name || '');
   var known = people().some(function (p) { return p.name === name; });
   b.style.display = known ? '' : 'none';
+}
+
+/**
+ * REVERSED, a copy of the UI's own BEGIN set just left of it, the same way
+ * HISTORY copies BACK. Positioned when shown, because a hidden BEGIN has no
+ * box to measure.
+ */
+function reverseButton(show, onTap) {
+  var begin = document.getElementById('btnBegin');
+  if (!begin) return;
+  var b = document.getElementById('btnReverse');
+  if (!b) {
+    b = document.createElement('button');
+    b.id = 'btnReverse';
+    b.className = begin.className.replace(/\bgone\b/, '');
+    b.innerHTML = begin.innerHTML.replace(/\s*\u2192/, '').replace('BEGIN', 'REVERSED');
+    tap(b, function () { b._onTap(); });
+    begin.parentNode.appendChild(b);
+  }
+  b._onTap = onTap;
+  var on = show && begin.offsetWidth > 0;
+  b.style.cssText = !on ? 'display:none' :
+    'display:block;position:absolute;right:auto;bottom:auto;margin:0' +
+    ';width:' + begin.offsetWidth + 'px;height:' + begin.offsetHeight + 'px' +
+    ';top:' + begin.offsetTop + 'px;left:' + (begin.offsetLeft - begin.offsetWidth - 20) + 'px';
 }
 
 /** Somebody's recorded workouts, newest first; [] when there are none. */
@@ -1339,6 +1373,7 @@ function fanLabel(n) { return n ? n + ' OF 4' : 'OFF'; }
    =========================================================================== */
 
 var BRIDGE = ['choose', 'chooseGuided', 'chooseRoute', 'skipWarmup', 'skipCooldown', 'pause',
+              'cooldown',
               'setSpeed',
               'resume', 'end', 'home', 'speed', 'incline', 'fan', 'setFan',
               'setWalker', 'ackDmk', 'hushCoach', 'dim', 'setUi', 'wakeBoard'];
@@ -1762,6 +1797,7 @@ global.STRIDE = {
   defaultWalker: defaultWalker,
   confirmWeight: confirmWeight,
   historyButton: historyButton,
+  reverseButton: reverseButton,
   showHistory: showHistory,
   kcal: kcal,
   uiList: uiList,

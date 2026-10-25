@@ -257,7 +257,8 @@ button{font-family:inherit;color:inherit;background:none;border:none;text-align:
 .paused .h{position:absolute;left:44px;top:196px;width:1000px;font-size:96px;font-weight:600;
            line-height:1.02;letter-spacing:-.03em}
 .paused .row{position:absolute;left:44px;top:430px;width:1192px;display:flex}
-.paused .row .card{width:460px;height:132px;margin-right:24px}
+.paused .row .card{flex:1;height:132px;margin-right:24px}
+.paused .row .card:last-child{margin-right:0}
 .paused .row .lab{position:absolute;left:0;top:50px;width:100%;text-align:center;
                   font-size:24px;font-weight:600;letter-spacing:.18em}
 
@@ -448,6 +449,7 @@ button{font-family:inherit;color:inherit;background:none;border:none;text-align:
     <div class="h" id="pausedHead">Paused.</div>
     <div class="row">
       <button class="card pick" id="btnResume"><span class="lab">RESUME</span></button>
+      <button class="card" id="btnCool"><span class="lab">COOL DOWN</span></button>
       <button class="card" id="btnEnd"><span class="lab">END</span></button>
     </div>
   </div>
@@ -708,6 +710,7 @@ tap($('btnStop'), () => {
   $('paused').classList.add('on');
 });
 tap($('btnResume'), () => { $('paused').classList.remove('on'); Stride.resume(); });
+tap($('btnCool'),   () => { $('paused').classList.remove('on'); Stride.cooldown(); });
 tap($('btnEnd'),    () => { $('paused').classList.remove('on'); Stride.end(); });
 tap($('btnDone'),   () => Stride.home());
 tap($('btnFan'),    () => Stride.fan());

@@ -623,6 +623,7 @@ button.pulse{animation:pulse .9s ease-out 2}
   <p id="pausedWhere">The belt has stopped.</p>
   <div class="row">
     <button class="primary" id="btnResume">RESUME</button>
+    <button id="btnCool">COOL DOWN</button>
     <button class="stop" id="btnEnd">END WORKOUT</button>
   </div>
 </div>
@@ -810,6 +811,7 @@ function showStep(n){
   $('btnBack').style.display = n > 1 ? 'block' : 'none';
   // BEGIN belongs to the guided picker and nowhere else.
   $('btnBegin').style.display = n === 3 ? 'block' : 'none';
+  syncReverse();
   $('wFoot').style.display = n === 1 ? 'block' : 'none';
   // The interface question belongs with "who is walking", not halfway into
   // choosing a plan.
@@ -898,8 +900,10 @@ function buildGuidedStep(){
         if (r.id !== chosenRoute) chosenLoop = false;
         chosenRoute = r.id;
         [...plans.children].forEach(c => c.classList.toggle('on', c === b));
+        syncReverse();
       });
     });
+    syncReverse();
     return;
   }
 
@@ -936,9 +940,15 @@ tap($('btnBack'), () => showStep(Math.max(1, stepNow - 1)));
    mean holding + until you reached it. */
 tap($('suggest'), () => { if (suggestKph > 0) Stride.setSpeed(suggestKph); });
 
+/* REVERSED beside BEGIN — see stride-core reverseButton(). */
+function syncReverse(){
+  STRIDE.reverseButton(stepNow === 3 && planMode === 'routes' && !!chosenRoute,
+                       () => Stride.chooseRoute(chosenRoute, chosenLoop, true));
+}
+
 tap($('btnBegin'), () => {
   // A route carries its own length, so it never takes a duration.
-  if (planMode === 'routes') { if (chosenRoute) Stride.chooseRoute(chosenRoute, chosenLoop); }
+  if (planMode === 'routes') { if (chosenRoute) Stride.chooseRoute(chosenRoute, chosenLoop, false); }
   else Stride.chooseGuided(chosenShape, chosenMinutes);
 });
 /* The settings screen is shared by all five interfaces — see
@@ -973,6 +983,7 @@ tap($('btnStop'),  () => {
   $('confirm').classList.add('show');
 });
 tap($('btnResume'), () => { $('confirm').classList.remove('show'); Stride.resume(); });
+tap($('btnCool'),   () => { $('confirm').classList.remove('show'); Stride.cooldown(); });
 tap($('btnEnd'),    () => { $('confirm').classList.remove('show'); Stride.end(); });
 tap($('btnDone'),   () => Stride.home());
 // The board only pulses mode 8 on removal, so we can't sense the key coming

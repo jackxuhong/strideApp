@@ -527,6 +527,7 @@ button{font-family:inherit;color:inherit;background:none;border:none;text-align:
     <div class="s" id="pausedWhere">No rush.</div>
     <div class="row">
       <button class="slab pick" id="btnResume"><span class="lab">BACK TO IT</span></button>
+      <button class="slab quiet" id="btnCool"><span class="lab">COOL DOWN</span></button>
       <button class="slab quiet" id="btnEnd"><span class="lab">I&rsquo;M DONE</span></button>
     </div>
   </div>
@@ -832,6 +833,7 @@ tap($('btnStop'), () => {
   $('paused').classList.add('on');
 });
 tap($('btnResume'), () => { $('paused').classList.remove('on'); Stride.resume(); });
+tap($('btnCool'),   () => { $('paused').classList.remove('on'); Stride.cooldown(); });
 tap($('btnEnd'),    () => { $('paused').classList.remove('on'); Stride.end(); });
 tap($('btnDone'),   () => Stride.home());
 tap($('btnFan'),    () => Stride.fan());
