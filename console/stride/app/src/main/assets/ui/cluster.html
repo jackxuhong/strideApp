@@ -557,7 +557,7 @@ button{font-family:inherit;color:inherit;background:none;border:none;text-align:
 
   <div class="paused" id="paused">
     <div class="scrim"></div>
-    <div class="k">BELT STOPPED &middot; SESSION HELD</div>
+    <div class="k">PAUSED &middot; SESSION HELD</div>
     <div class="h mono" id="pausedAt">0:00</div>
     <div class="s mono" id="pausedWhere">&mdash;</div>
     <div class="row">
@@ -827,8 +827,10 @@ tap($('btnLead'), () => {
   }
 });
 tap($('btnStop'), () => {
-  if (shownPhase !== 'active' && shownPhase !== 'warmup' && shownPhase !== 'paused') return;
-  Stride.pause();
+  if (shownPhase !== 'active' && shownPhase !== 'warmup' && shownPhase !== 'paused' && shownPhase !== 'cooldown') return;
+  // In the cool-down STOP is the end: belt stops, summary follows. No question.
+  if (shownPhase === 'cooldown') { Stride.stop(); return; }
+  Stride.stop();
   $('paused').classList.add('on');
 });
 tap($('btnResume'), () => { $('paused').classList.remove('on'); Stride.resume(); });

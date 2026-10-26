@@ -620,7 +620,7 @@ button.pulse{animation:pulse .9s ease-out 2}
   <h1>Workout paused</h1>
   <!-- Says where you are, not just that you stopped. Someone coming back to a
        paused console after answering the door wants the walk located again. -->
-  <p id="pausedWhere">The belt has stopped.</p>
+  <p id="pausedWhere">Timer held.</p>
   <div class="row">
     <button class="primary" id="btnResume">RESUME</button>
     <button id="btnCool">COOL DOWN</button>
@@ -975,11 +975,13 @@ tap($('btnStart'), () => {
   ack($('btnStart'));
 });
 tap($('btnStop'),  () => {
-  // Cool-down is already the way out; STOP there would just be a second one.
-  if (shownMode !== 'warmup' && shownMode !== 'running' && shownMode !== 'paused') return;
+  if (shownMode !== 'warmup' && shownMode !== 'running' && shownMode !== 'paused' &&
+      shownMode !== 'cooldown') return;
+  // In the cool-down STOP is the end: belt stops, summary follows. No question.
+  if (shownMode === 'cooldown') { Stride.stop(); return; }
   closeFan();
-  // Halt the belt first, ask second. Never the other way round.
-  Stride.pause();
+  // Slow the belt first, ask second. Never the other way round.
+  Stride.stop();
   $('confirm').classList.add('show');
 });
 tap($('btnResume'), () => { $('confirm').classList.remove('show'); Stride.resume(); });
@@ -1581,7 +1583,7 @@ window.render = function(s){
     const where = [mmss(s.elapsed ?? 0) + ' in'];
     if (s.segments) where.push(`${s.segmentLabel || 'segment ' + s.segment} · ${s.segment} of ${s.segments}`);
     else where.push(STRIDE.dist(s.distance ?? 0));
-    where.push('the belt has stopped');
+    where.push('timer held');
     $('pausedWhere').textContent = where.join(' · ');
   }
 
@@ -1592,7 +1594,6 @@ window.render = function(s){
                   : mode === 'paused'   ? 'RESUME'
                   : 'PAUSE';
   btn.classList.toggle('active', mode === 'running');
-  $('btnStop').classList.toggle('muted', mode === 'cooldown');
   $('btnSpeedUp').classList.toggle('muted', !moving);
   $('btnSpeedDown').classList.toggle('muted', !moving);
 

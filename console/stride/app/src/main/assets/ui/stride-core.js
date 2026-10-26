@@ -1373,7 +1373,7 @@ function fanLabel(n) { return n ? n + ' OF 4' : 'OFF'; }
    =========================================================================== */
 
 var BRIDGE = ['choose', 'chooseGuided', 'chooseRoute', 'skipWarmup', 'skipCooldown', 'pause',
-              'cooldown',
+              'cooldown', 'stop',
               'setSpeed',
               'resume', 'end', 'home', 'speed', 'incline', 'fan', 'setFan',
               'setWalker', 'ackDmk', 'hushCoach', 'dim', 'setUi', 'wakeBoard'];

@@ -828,8 +828,10 @@ tap($('btnLead'), () => {
   }
 });
 tap($('btnStop'), () => {
-  if (shownPhase !== 'active' && shownPhase !== 'warmup' && shownPhase !== 'paused') return;
-  Stride.pause();
+  if (shownPhase !== 'active' && shownPhase !== 'warmup' && shownPhase !== 'paused' && shownPhase !== 'cooldown') return;
+  // In the cool-down STOP is the end: belt stops, summary follows. No question.
+  if (shownPhase === 'cooldown') { Stride.stop(); return; }
+  Stride.stop();
   $('paused').classList.add('on');
 });
 tap($('btnResume'), () => { $('paused').classList.remove('on'); Stride.resume(); });
