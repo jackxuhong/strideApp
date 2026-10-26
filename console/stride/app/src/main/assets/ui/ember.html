@@ -530,9 +530,10 @@ button{font-family:inherit;color:inherit;background:none;border:none;
   <div class="paused" id="paused">
     <div class="scrim"></div>
     <div class="h" id="pausedAt">Paused</div>
-    <div class="s" id="pausedWhere">The belt has stopped. Nothing is lost.</div>
+    <div class="s" id="pausedWhere">Timer held. Nothing is lost.</div>
     <div class="row">
       <button class="card pick" id="btnResume"><span class="lab">RESUME</span></button>
+      <button class="card" id="btnCool"><span class="lab">COOL DOWN</span></button>
       <button class="card" id="btnEnd"><span class="lab" id="endLab">END WALK</span></button>
     </div>
   </div>
@@ -828,12 +829,15 @@ tap($('btnLead'), () => {
   }
 });
 tap($('btnStop'), () => {
-  if (shownPhase !== 'active' && shownPhase !== 'warmup' && shownPhase !== 'paused') return;
+  if (shownPhase !== 'active' && shownPhase !== 'warmup' && shownPhase !== 'paused' && shownPhase !== 'cooldown') return;
+  // In the cool-down STOP is the end: belt stops, summary follows. No question.
+  if (shownPhase === 'cooldown') { Stride.stop(); return; }
   // Halt the belt first, ask second. Never the other way round.
-  Stride.pause();
+  Stride.stop();
   $('paused').classList.add('on');
 });
 tap($('btnResume'), () => { $('paused').classList.remove('on'); Stride.resume(); });
+tap($('btnCool'),   () => { $('paused').classList.remove('on'); Stride.cooldown(); });
 tap($('btnEnd'),    () => { $('paused').classList.remove('on'); Stride.end(); });
 tap($('btnDone'),   () => Stride.home());
 tap($('btnFan'),    () => Stride.fan());
@@ -1039,8 +1043,8 @@ window.render = function(raw){
     $('endLab').textContent = 'END WORKOUT';
     $('pausedWhere').textContent = guided && s.segment.count
       ? s.segment.name + ' · ' + s.segment.index + ' of ' + s.segment.count +
-        ' · the belt has stopped. Nothing is lost.'
-      : 'The belt has stopped. Nothing is lost.';
+        ' · timer held. Nothing is lost.'
+      : 'Timer held. Nothing is lost.';
   }
 };
 

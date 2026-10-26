@@ -172,6 +172,18 @@ data class Route(
                     segments = segments + back)
     }
 
+    /**
+     * The same route walked from the other end: segments mirrored, grades
+     * negated, and the climb is what was the descent. Composes with
+     * [outAndBack] — reverse first, then loop.
+     */
+    fun reversed(): Route = copy(
+        name = "$name, reversed",
+        climbM = segments.sumOf { Math.max(0.0, -it.incline) / 100.0 * (it.endM - it.startM) },
+        segments = segments.asReversed().map {
+            Segment(startM = distanceM - it.endM, endM = distanceM - it.startM, incline = -it.incline)
+        })
+
     /** The incline at a given distance into the walk. */
     fun inclineAt(metres: Double): Double {
         if (segments.isEmpty()) return 0.0
