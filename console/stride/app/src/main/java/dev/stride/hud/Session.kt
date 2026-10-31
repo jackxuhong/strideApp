@@ -21,15 +21,17 @@ object Session {
     const val PAUSED = 3     // belt stopped, timer held
     const val COOLDOWN = 4   // easing back down, skippable
     const val SUMMARY = 5    // post-workout recap
+    const val HOLD = 6       // STOP pressed: timer held, belt at cool-down pace while they choose
 
     fun name(v: Int) = when (v) {
         WELCOME -> "welcome"; WARMUP -> "warmup"; ACTIVE -> "running"
-        PAUSED -> "paused"; COOLDOWN -> "cooldown"; SUMMARY -> "summary"
+        // HOLD is a pause to everything outside: same screen, same dialog.
+        PAUSED, HOLD -> "paused"; COOLDOWN -> "cooldown"; SUMMARY -> "summary"
         else -> "unknown"
     }
 
-    /** States in which the belt is live and the clock is running. */
-    fun isMoving(v: Int) = v == WARMUP || v == ACTIVE || v == COOLDOWN
+    /** States in which the belt is live. */
+    fun isMoving(v: Int) = v == WARMUP || v == ACTIVE || v == COOLDOWN || v == HOLD
 }
 
 /** One frame of everything both the HUD and Home Assistant need. */

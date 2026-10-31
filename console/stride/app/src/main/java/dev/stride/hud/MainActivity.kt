@@ -258,6 +258,8 @@ class MainActivity : Activity() {
          * so anything still running after this has stuck, and the net wins.
          */
         const val WIND_DOWN_MAX_MS = 10_000L
+        /** How long STOP's hold keeps the belt turning without an answer. */
+        const val HOLD_MAX_MS = 60_000L
 
         /**
          * Below this the belt counts as stopped. Not zero: the board reports
@@ -558,6 +560,8 @@ class MainActivity : Activity() {
     @Volatile private var route: Route? = null
 
     @Volatile private var planSteps: List<Plan.Step> = emptyList()
+    /** False until the warm-up gives way to the workout, which is where its numbers start. */
+    @Volatile private var begun = false
     @Volatile private var stepIndex = -1
 
     /**
@@ -845,9 +849,7 @@ class MainActivity : Activity() {
             workout = WORKOUT
             clearPlan()
             resetSession()
-            session = Session.WARMUP
-            activeSince = SystemClock.elapsedRealtime()
-            phaseEndsAt = activeSince + cfg.warmupMs()
+            startWarmup()
             targetKph = 0.0
             rampTo = cfg.warmupKph()
             rampReason = "warmup"
@@ -859,11 +861,9 @@ class MainActivity : Activity() {
         /**
          * Start a guided walk.
          *
-         * Goes straight to ACTIVE rather than through the two-minute WARMUP
-         * phase: every template opens with its own flat settle segment, and
-         * having both would mean warming up twice. The plan's stated duration is
-         * therefore the whole walk, closing segment included, which is what a
-         * duration selector implies.
+         * Warms up first, like every workout. The workout's clock starts when
+         * the warm-up ends (see [begun]), so the stated duration is the plan
+         * itself, warm-up and cool-down on either side of it.
          */
         /**
          * @param minutes  the walk's length, or **0 for an open-ended route** —
@@ -891,9 +891,7 @@ class MainActivity : Activity() {
 
             workout = WORKOUT
             resetSession()
-            session = Session.ACTIVE
-            activeSince = SystemClock.elapsedRealtime()
-            phaseEndsAt = 0L
+            startWarmup()
             targetKph = 0.0
             targetGrade = 0.0
             rampTo = cfg.warmupKph()
@@ -932,18 +930,20 @@ class MainActivity : Activity() {
          * time slot means never reaching the summit, which is the reason for
          * walking it again.
          *
+         * @param reverse start from the far end — see [Route.reversed].
          * @param loop walk it out and then walk it home — see [Route.outAndBack].
          *             A property of *this* walk, chosen on the picker, not of
          *             the route: the same 30-minute one-way walk is the right
          *             length some mornings and half a walk on others.
          */
-        @JavascriptInterface fun chooseRoute(id: String, loop: Boolean) {
+        @JavascriptInterface fun chooseRoute(id: String, loop: Boolean, reverse: Boolean) {
             if (dmk) return
             val found = routes.byId(id) ?: run {
                 Log.w(TAG, "no such route: $id")
                 return
             }
-            val r = if (loop) found.outAndBack() else found
+            val one = if (reverse) found.reversed() else found
+            val r = if (loop) one.outAndBack() else one
 
             route = r
             planLoops = false
@@ -966,9 +966,7 @@ class MainActivity : Activity() {
 
             workout = WORKOUT
             resetSession()
-            session = Session.ACTIVE
-            activeSince = SystemClock.elapsedRealtime()
-            phaseEndsAt = 0L
+            startWarmup()
             targetKph = 0.0
             targetGrade = 0.0
             rampTo = cfg.warmupKph()
@@ -1002,7 +1000,29 @@ class MainActivity : Activity() {
 
         /** Belt to a halt, timer held. The board's own Pause is the legal exit
          *  from Running — writing Idle while running is silently ignored. */
+        /**
+         * The screen's STOP, as opposed to PAUSE: from the workout it eases to
+         * cool-down pace and holds there while the pause screen asks RESUME,
+         * COOL DOWN or END. Anywhere else, and pressed again, it is [pause].
+         */
+        @JavascriptInterface fun stop() {
+            if (session == Session.ACTIVE && !dmk) {
+                enterHold()
+                repaint()
+                return
+            }
+            pause()
+        }
+
         @JavascriptInterface fun pause() {
+            val held = session == Session.HOLD
+            // STOP during a cool-down is the end of it, not a pause in it.
+            if (session == Session.COOLDOWN) {
+                Log.i(TAG, "stop pressed in the cool-down — finishing")
+                requestFinish()
+                repaint()
+                return
+            }
             // Pressed again while the belt is still easing down: that is
             // somebody asking a second time, and the answer to asking twice is
             // the stop they would have got before any of this existed.
@@ -1018,13 +1038,14 @@ class MainActivity : Activity() {
                 return
             }
             if (Session.isMoving(session)) {
-                accumulatedMs += SystemClock.elapsedRealtime() - activeSince
+                if (counting()) accumulatedMs += SystemClock.elapsedRealtime() - activeSince
                 session = Session.PAUSED
                 phaseEndsAt = 0L
             }
             // Remember the pace so RESUME can climb back to it. Taken before the
-            // wind-down starts eating it.
-            if (targetKph > 0.0) pausedKph = targetKph
+            // wind-down starts eating it — and not from a hold, whose pace is
+            // the cool-down's; enterHold kept the real one.
+            if (targetKph > 0.0 && !held) pausedKph = targetKph
             rampTo = 0.0
             rampReason = ""
             // Above a walk the speed is shed first — see STOP_EASE_ABOVE_KPH.
@@ -1053,8 +1074,10 @@ class MainActivity : Activity() {
         @JavascriptInterface fun resume() {
             askEnd = false
             if (dmk) return
-            if (session != Session.PAUSED) return
+            if (session != Session.PAUSED && session != Session.HOLD) return
+            val held = session == Session.HOLD
             session = Session.ACTIVE
+            phaseEndsAt = 0L
             activeSince = SystemClock.elapsedRealtime()
             // RESUME during a STOP's wind-down catches the belt where it is and
             // climbs from there. Zeroing the target would drop it to a
@@ -1063,7 +1086,8 @@ class MainActivity : Activity() {
             if (stopping) {
                 stopping = false
                 Log.i(TAG, "resumed mid wind-down at ${"%.1f".format(targetKph)} km/h")
-            } else {
+            } else if (!held) {
+                // From a hold the belt is still turning; climb from there.
                 targetKph = 0.0
             }
             rampTo = if (pausedKph > 0.0) pausedKph else cfg.warmupKph()
@@ -1087,6 +1111,13 @@ class MainActivity : Activity() {
         @JavascriptInterface fun end() {
             askEnd = false
             if (session == Session.SUMMARY) return
+            // From a hold the belt is at cool-down pace: bring it to a stop.
+            if (session == Session.HOLD) {
+                Log.i(TAG, "ended from the hold — stopping")
+                requestFinish()
+                repaint()
+                return
+            }
             // Ending from a pause means the belt is already stopped. Running a
             // cool-down from there spins it back up to 2 km/h only to walk it
             // down again, which is disconcerting and faintly alarming — the
@@ -1101,24 +1132,18 @@ class MainActivity : Activity() {
                 repaint()
                 return
             }
-            val now = SystemClock.elapsedRealtime()
-            // Coming out of a pause the clock is already stopped; restart it so
-            // the cool-down is counted like any other part of the workout.
-            if (!Session.isMoving(session)) activeSince = now
-            session = Session.COOLDOWN
-            phaseEndsAt = now + cfg.cooldownMs()
-            pausedKph = 0.0
-            rampTo = cfg.warmupKph()
-            rampReason = "cooldown"
-            // Put the machine back how you'd want to find it. Incline is the one
-            // setting that persists otherwise, and starting the next walk on
-            // yesterday's hill is a nasty surprise.
-            targetGrade = 0.0
-            pendingWrite = mapOf(
-                FitPro.Field.GRADE to 0.0,
-                FitPro.Field.WORKOUT_MODE to FitPro.Mode.RUNNING.toDouble(),
-            )
-            Log.i(TAG, "cooling down for ${cfg.cooldownMs() / 1000}s")
+            startCooldown()
+            repaint()
+        }
+
+        /**
+         * The pause screen's COOL DOWN: the belt comes back up to walking pace
+         * for the cool-down instead of the workout ending where it stopped.
+         */
+        @JavascriptInterface fun cooldown() {
+            askEnd = false
+            if (dmk || (session != Session.PAUSED && session != Session.HOLD)) return
+            startCooldown()
             repaint()
         }
 
@@ -1851,12 +1876,37 @@ class MainActivity : Activity() {
     private fun followButtons(from: Int?, to: Int) {
         val paused = session == Session.PAUSED
         when {
+            // The board stopped during the cool-down — its STOP, most likely.
+            // That ends the cool-down, and the workout with it.
+            session == Session.COOLDOWN && !restartFromResults && to != FitPro.Mode.RUNNING -> {
+                Log.i(TAG, "board left Running in the cool-down — finishing")
+                finishWorkout()
+            }
             // RESUME pressed with the board in Results — see resume(). These
             // are STRIDE's own transitions, not buttons.
             restartFromResults -> if (to == FitPro.Mode.IDLE) {
                 restartFromResults = false
                 pendingWrite = mapOf(FitPro.Field.WORKOUT_MODE to FitPro.Mode.RUNNING.toDouble())
                 Log.i(TAG, "board back to idle — starting it again")
+            }
+            // The console's STOP mid-workout does what the screen's does. The
+            // board has already started braking, so this catches the belt
+            // within a poll and brings it back to cool-down pace rather than
+            // to the old speed. Pressed again in the hold, it falls through to
+            // the branch below and stops for real.
+            from == FitPro.Mode.RUNNING && to == FitPro.Mode.PAUSE &&
+                session == Session.ACTIVE && !dmk -> {
+                Log.i(TAG, "physical STOP — holding at cool-down pace")
+                enterHold()
+                targetKph = minOf(targetKph, cfg.warmupKph())
+                rampTo = 0.0
+                rampReason = ""
+                pendingWrite = mapOf(
+                    FitPro.Field.WORKOUT_MODE to FitPro.Mode.RUNNING.toDouble(),
+                    FitPro.Field.KPH to targetKph,
+                )
+                // Original only raises its dialog on askEnd; the rest do on "paused".
+                askEnd = true
             }
             from == FitPro.Mode.RUNNING && to == FitPro.Mode.PAUSE && Session.isMoving(session) -> {
                 Log.i(TAG, "physical STOP — pausing")
@@ -1893,10 +1943,11 @@ class MainActivity : Activity() {
 
     /** The bookkeeping half of a pause, for when the board has already stopped. */
     private fun holdForPause() {
-        accumulatedMs += SystemClock.elapsedRealtime() - activeSince
+        if (counting()) accumulatedMs += SystemClock.elapsedRealtime() - activeSince
+        // A hold's pace is the cool-down's; enterHold already kept the real one.
+        if (targetKph > 0.0 && session != Session.HOLD) pausedKph = targetKph
         session = Session.PAUSED
         phaseEndsAt = 0L
-        if (targetKph > 0.0) pausedKph = targetKph
         targetKph = 0.0
         stopping = false
         rampTo = 0.0
@@ -2039,7 +2090,7 @@ class MainActivity : Activity() {
      * from it.
      */
     private fun finishWorkout() {
-        if (Session.isMoving(session)) {
+        if (counting()) {
             accumulatedMs += SystemClock.elapsedRealtime() - activeSince
         }
         session = Session.SUMMARY
@@ -2163,7 +2214,7 @@ class MainActivity : Activity() {
                 // view, and what the console fell back to was the casual lap
                 // counter, which is where a finished route used to spend its
                 // last few seconds. It goes on the way out of the summary.
-                requestFinish()
+                startCooldown()
             }
             return
         }
@@ -2208,7 +2259,7 @@ class MainActivity : Activity() {
                     // casual oval; it is also what the summary reads its name
                     // off, so a guided walk would be recapped as a manual one.
                     // It is cleared on the way out of the summary instead.
-                    requestFinish()
+                    startCooldown()
                 }
                 return
             }
@@ -2262,6 +2313,75 @@ class MainActivity : Activity() {
         Log.i(TAG, "guided: incline -> ${"%.1f".format(targetGrade)}% (goal ${"%.1f".format(goal)}%)")
     }
 
+    /** Every workout opens this way; [Settings.warmupMs] of 0 skips straight through. */
+    private fun startWarmup() {
+        session = Session.WARMUP
+        activeSince = SystemClock.elapsedRealtime()
+        phaseEndsAt = activeSince + cfg.warmupMs()
+    }
+
+    /**
+     * Belt back to walking pace and the deck flat for [Settings.cooldownMs],
+     * then the summary. Comes from a plan or route running out, END while
+     * moving, or COOL DOWN on the pause screen.
+     *
+     * Nothing done in it counts: the clock and the stats stop here (see
+     * [counting]), so the summary and history are the workout alone.
+     */
+    private fun startCooldown() {
+        val now = SystemClock.elapsedRealtime()
+        if (counting()) accumulatedMs += now - activeSince
+        val fromStop = session == Session.PAUSED
+        session = Session.COOLDOWN
+        phaseEndsAt = now + cfg.cooldownMs()
+        pausedKph = 0.0
+        // From a pause the belt is stopped, or still easing down from STOP:
+        // climb from wherever it is, as resume() does.
+        if (fromStop && !stopping) targetKph = 0.0
+        stopping = false
+        rampTo = cfg.warmupKph()
+        rampReason = "cooldown"
+        // Put the machine back how you'd want to find it. Incline is the one
+        // setting that persists otherwise, and starting the next walk on
+        // yesterday's hill is a nasty surprise.
+        targetGrade = 0.0
+        pendingWrite = mapOf(
+            FitPro.Field.GRADE to 0.0,
+            FitPro.Field.WORKOUT_MODE to FitPro.Mode.RUNNING.toDouble(),
+        )
+        // Same trap as resume(): a board in Results refuses Running.
+        if (fromStop && lastBoardMode == FitPro.Mode.RESULTS) {
+            restartFromResults = true
+            pendingWrite = mapOf(
+                FitPro.Field.GRADE to 0.0,
+                FitPro.Field.WORKOUT_MODE to FitPro.Mode.IDLE.toDouble(),
+            )
+        }
+        Log.i(TAG, "cooling down for ${cfg.cooldownMs() / 1000}s")
+    }
+
+    /**
+     * STOP from the workout: the clock stops, the belt eases down to cool-down
+     * pace (never up to it) and holds there, so COOL DOWN can carry straight on
+     * and RESUME climbs back from walking pace rather than from a standstill.
+     * STOP again, or no answer in [HOLD_MAX_MS], and it stops for real.
+     */
+    private fun enterHold() {
+        val now = SystemClock.elapsedRealtime()
+        accumulatedMs += now - activeSince
+        session = Session.HOLD
+        phaseEndsAt = now + HOLD_MAX_MS
+        if (targetKph > 0.0) pausedKph = targetKph
+        val slow = cfg.warmupKph()
+        rampTo = if (targetKph > slow) slow else 0.0
+        rampReason = if (rampTo > 0.0) "stopping" else ""
+        Log.i(TAG, "stop pressed — holding at ${"%.1f".format(minOf(targetKph, slow))} km/h")
+    }
+
+    /** The part of a session whose time and distance are the workout's: not
+     *  the warm-up, not the cool-down. */
+    private fun counting() = session == Session.ACTIVE
+
     /** Warm-up rolls into the workout; cool-down rolls into the summary. */
     private fun advancePhase() {
         if (phaseEndsAt == 0L || SystemClock.elapsedRealtime() < phaseEndsAt) return
@@ -2272,6 +2392,11 @@ class MainActivity : Activity() {
                 Log.i(TAG, "warm-up complete")
             }
             Session.COOLDOWN -> requestFinish()
+            // Nobody answered: nobody may be on the belt. Stop it.
+            Session.HOLD -> {
+                Log.i(TAG, "no answer in ${HOLD_MAX_MS / 1000}s — stopping the belt")
+                Bridge().pause()
+            }
         }
     }
 
@@ -2285,6 +2410,7 @@ class MainActivity : Activity() {
         restartFromResults = false
         accumulatedMs = 0L
         activeSince = SystemClock.elapsedRealtime()
+        begun = false
         armBaseline = true
         sessionDistance = 0.0
         sessionCalories = 0.0
@@ -2342,8 +2468,7 @@ class MainActivity : Activity() {
     }
 
     private fun elapsedSec(): Double {
-        val live = if (Session.isMoving(session))
-            SystemClock.elapsedRealtime() - activeSince else 0L
+        val live = if (counting()) SystemClock.elapsedRealtime() - activeSince else 0L
         return (accumulatedMs + live) / 1000.0
     }
 
@@ -2867,8 +2992,9 @@ class MainActivity : Activity() {
         if (boardMode != null && boardMode != FitPro.Mode.SLEEP) wakeAskedAt = 0L
         if (keyOut && !dmk) Log.w(TAG, "safety key removed")
         dmk = dmkLatched
+        if (keyOut && session == Session.COOLDOWN) finishWorkout()
         if (keyOut && Session.isMoving(session)) {
-            accumulatedMs += SystemClock.elapsedRealtime() - activeSince
+            if (counting()) accumulatedMs += SystemClock.elapsedRealtime() - activeSince
             session = Session.PAUSED
             phaseEndsAt = 0L
             targetKph = 0.0
@@ -2889,6 +3015,15 @@ class MainActivity : Activity() {
             baseDistance = rawDistance
             armBaseline = false
             Log.i(TAG, "session baseline: d=$baseDistance")
+        }
+        // The first frame of the workout proper, however the warm-up ended —
+        // running out, SKIP, or a resume from a pause in it. The warm-up is not
+        // counted, so the clock and the odometer start from here.
+        if (session == Session.ACTIVE && !begun) {
+            begun = true
+            baseDistance = rawDistance
+            activeSince = SystemClock.elapsedRealtime()
+            Log.i(TAG, "workout begins: d=$baseDistance")
         }
 
         val actual = v[FitPro.Field.ACTUAL_KPH] ?: 0.0
@@ -2954,7 +3089,8 @@ class MainActivity : Activity() {
 
         val pulse = pulseNow(v[FitPro.Field.PULSE]?.toInt() ?: 0)
 
-        if (Session.isMoving(session)) {
+        // Not in the cool-down: it is not part of the workout's numbers.
+        if (counting()) {
             // The board zeroes its odometer when its own STOP takes it through
             // Results to Idle, mid-walk as far as STRIDE knows. Re-anchor so
             // the walk keeps what it had rather than restarting from 0.
@@ -3002,7 +3138,7 @@ class MainActivity : Activity() {
         }
 
         val elapsedNow = elapsedSec()
-        if (Session.isMoving(session)) {
+        if (session == Session.ACTIVE) {
             // A route is ground, not a timetable — see routeTick.
             if (route != null) routeTick(sessionDistance) else planTick(elapsedNow)
         }
@@ -3057,7 +3193,6 @@ class MainActivity : Activity() {
             // told which it is rather than being left to guess.
             segmentLeft = when {
                 step == null -> 0.0
-                route != null -> (step.endSec - sessionDistance).coerceAtLeast(0.0)
                 else -> (step.endSec - planElapsed).coerceAtLeast(0.0)
             },
             segmentLeftIsDistance = route != null,
